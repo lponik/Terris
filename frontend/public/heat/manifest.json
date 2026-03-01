@@ -1,0 +1,1 @@
+{"generated_at_utc":"2026-03-01T00:37:09.203864+00:00","input_csv":"data/processed/all_sites.csv","counts":{"industrial":138059,"landfill":2323,"military":163,"superfund":2116,"combined":142661},"files":{"industrial":"/heat/industrial.json","landfill":"/heat/landfill.json","military":"/heat/military.json","superfund":"/heat/superfund.json","combined":"/heat/combined.json"}}
