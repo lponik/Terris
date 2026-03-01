@@ -24,12 +24,12 @@ const aboutSections = [
     caution: "",
   },
   {
-    title: "AI Usage",
-    summary: "AI (Gemini) is used to explain the results in clear, structured language.",
+    title: "Report Explanation",
+    summary: "Terris provides clear, structured explanations using deterministic scoring signals.",
     details: [
       "The score itself is always computed deterministically by the backend.",
-      "If AI is unavailable, the core analysis still works exactly the same.",
-      "AI adds explanation - not authority.",
+      "Explanations are generated from the same fixed proximity and density inputs.",
+      "The report adds context - not authority.",
     ],
     caution: "",
   },

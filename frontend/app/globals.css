@@ -34,6 +34,8 @@ body {
   margin: 0;
   min-height: 100%;
   padding: 0;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 body {
@@ -43,6 +45,12 @@ body {
     radial-gradient(130% 120% at 0% 100%, rgba(15, 111, 67, 0.2) 0%, rgba(15, 111, 67, 0) 46%),
     radial-gradient(130% 120% at 100% 0%, rgba(10, 74, 44, 0.22) 0%, rgba(10, 74, 44, 0) 45%),
     linear-gradient(180deg, #050d08 0%, #020503 100%);
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 a {
