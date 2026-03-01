@@ -1,105 +1,126 @@
-# PFAS Risk Scoring Data Layer (Offline)
+# Terris
 
-This repository builds a **clean, reproducible offline data bundle** for a national U.S. map used in PFAS distance/risk scoring.
+Terris is a deterministic environmental exposure screening app.
 
-Processing uses manually downloaded raw data in `data/raw/` and outputs normalized CSVs in `data/processed/`.
+It helps users explore nearby environmental site records and returns a transparent `0-10` screening score based on fixed rules. It does not detect contamination and it is not a diagnostic tool.
 
-## Quick Start
+## What Terris Includes
 
-```bash
-python scripts/process_all.py --overwrite
-python scripts/validate.py
-python scripts/export_heat_points.py
-python scripts/smoke_test.py
-```
+- Backend: FastAPI (`backend/`)
+- Frontend: Next.js 14 + TypeScript + Tailwind + Leaflet (`frontend/`)
+- Data pipeline scripts: normalized U.S. site datasets (`scripts/`)
 
-If `python` is not available in your shell, use `python3`.
-Place the Superfund `.gdb` in `data/raw/` (for example `data/raw/superfund_npl.gdb`).
-Run `python scripts/process_all.py --overwrite` then `python scripts/validate.py` to regenerate outputs including Superfund rows.
+## How Scoring Works
 
-## Option A Industrial Filtering (Recommended for API Scoring)
+Terris computes a deterministic score from:
 
-Use FRS National Program participation to keep higher-signal industrial facilities
-(TRI, RCRA, CERCLA/Superfund-related matches):
+- Landfill proximity (`0-3`)
+- Military base proximity (`0-3`)
+- Industrial density (`0-4`)
+- Superfund proximity (weighted)
 
-```bash
-python scripts/rebuild_industrial_filtered.py --overwrite
-python scripts/validate.py
-```
+Total score is clamped to `0-10`, then mapped to:
 
-This reduces industrial facility volume and improves scoring signal quality.
-If `NATIONAL_PROGRAM_FILE.CSV` is missing, the script falls back to facility-level
-program text fields in `NATIONAL_FACILITY_FILE.CSV`.
+- `Low`
+- `Moderate`
+- `High`
 
-## Industrial Reduction Without Program File
+The same location always returns the same score for the same dataset version.
 
-When only `NATIONAL_FACILITY_FILE.CSV` is available, run:
+## Run Locally (Quick Start)
+
+### 1) Backend
 
 ```bash
-python scripts/rebuild_industrial_reduced_no_program.py --overwrite
-python scripts/validate.py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Method used:
-- Stage 1 high-signal proxy:
-  - NAICS prefix filter if NAICS exists, else facility-name keyword proxy filter.
-- Stage 2 density cap:
-  - 0.05 degree grid with max 10 facilities per cell.
+Backend URL: `http://localhost:8000`
 
-This is a reproducible proxy reduction for map/scoring stability, not direct PFAS confirmation.
+### 2) Frontend
 
-## Folder Layout
+```bash
+cd frontend
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+Frontend URL: `http://localhost:3000`
+
+If needed, set `NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local`.
+
+## API Endpoints
+
+- `GET /health`
+- `GET /stats`
+- `POST /analyze`
+- `POST /report`
+
+## Environment Variables
+
+### Backend (important)
+
+- `ENVIRONMENT`: `development` or `production`
+- `FRONTEND_ORIGIN`: required when `ENVIRONMENT=production`
+- `DATA_PATH`: default `data/processed/all_sites.csv`
+- `PORT`: default `8000`
+- `CACHE_SIZE`: default `5000`
+- `CACHE_ROUNDING_DECIMALS`: default `4`
+- `REPORT_CACHE_TTL_SECONDS`: default `259200`
+- `REPORT_CACHE_MAX_ITEMS`: default `2000`
+- `APP_VERSION`: default `0.1.0`
+
+### Frontend
+
+- `NEXT_PUBLIC_API_BASE_URL`: backend base URL
+
+## Data Notes
+
+The backend expects `data/processed/all_sites.csv` at startup.
+
+If your processed dataset is missing, regenerate data with scripts from `scripts/` (see `SOURCES.md` and script docs).
+
+## Deploy (Recommended)
+
+### Backend on Render
+
+- Build command:
+  - `pip install -r backend/requirements.txt`
+- Start command:
+  - `uvicorn backend.app.main:app --host 0.0.0.0 --port 10000`
+- Env vars:
+  - `ENVIRONMENT=production`
+  - `FRONTEND_ORIGIN=https://<your-vercel-domain>`
+  - `DATA_PATH=data/processed/all_sites.csv`
+- Health check path:
+  - `/health`
+
+### Frontend on Vercel
+
+- Set:
+  - `NEXT_PUBLIC_API_BASE_URL=https://<your-render-backend-domain>`
+- Redeploy frontend.
+
+## Repo Layout
 
 ```text
 .
+├── backend/
 ├── data/
-│   ├── raw/              # manual downloads (not fetched by scripts)
-│   └── processed/        # generated normalized outputs
+├── frontend/
 ├── scripts/
-│   ├── rebuild_industrial_filtered.py
-│   ├── process_all.py
-│   ├── validate.py
-│   └── smoke_test.py
-├── README.md
 ├── SOURCES.md
-└── .gitignore
+└── README.md
 ```
 
-## Data Flow
+## Important Scope
 
-- Detect raw files in `data/raw/` (FRS facilities, military bases, LMOP landfills).
-- Stream-process FRS program participation (large CSV) to build eligible REGISTRY_IDs.
-- Stream-process FRS facilities (large CSV) and keep only facilities with eligible program participation.
-- Process military bases from CSV or GeoJSON into unified schema.
-- Process LMOP landfill XLSX (via `openpyxl`) into unified schema.
-- Write:
-  - `data/processed/industrial_frs.csv`
-  - `data/processed/military_base.csv`
-  - `data/processed/landfill.csv`
-  - `data/processed/all_sites.csv`
-- Validate all processed outputs and write `data/processed/summary.json`.
-- Run smoke test point analyses for NYC, Chicago, and LA.
+Terris is a proximity-based screening signal:
 
-## Unified Schema
-
-All processed CSVs use this exact column set:
-
-| Column | Type | Description |
-|---|---|---|
-| `id` | string | Stable source-prefixed ID |
-| `name` | string | Site/facility name |
-| `category` | string | One of `industrial_frs`, `military_base`, `landfill` |
-| `lat` | float | Latitude |
-| `lon` | float | Longitude |
-| `state` | string | 2-letter U.S. state code when available |
-| `source` | string | Source identifier |
-| `metadata_json` | stringified JSON | Light source-specific metadata |
-
-## Important Notes
-
-- Processing is fully offline; no internet is required during processing.
-- Raw files are expected to be manually downloaded into `data/raw/`.
-- Superfund `.gdb` ingestion uses `geopandas` plus either `fiona` or `pyogrio` in the pipeline environment (not required for backend runtime).
-- Run `python scripts/export_heat_points.py` after processing/validation to refresh frontend heat-layer JSON files in `frontend/public/heat/`.
-- FRS National Facility and National Program inputs are very large (multi-GB). `rebuild_industrial_filtered.py` uses streaming row-by-row logic and periodic progress logs to remain memory-safe.
-- Use `--overwrite` to regenerate processed outputs cleanly.
+- It does not measure water, soil, or air samples.
+- It does not prove contamination.
+- It should be used with official records and local testing.
