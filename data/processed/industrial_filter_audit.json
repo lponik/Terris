@@ -1,0 +1,86 @@
+{
+  "timestamp": "2026-03-01T01:51:36.323311+00:00",
+  "method": "rebuild_industrial_reduced_no_program.py",
+  "low_signal_filter_enabled": true,
+  "removed_low_signal": 10481,
+  "removed_examples": [
+    "JOHN M ASPLUND WASTE WATER CONTROL FACILITY",
+    "SITKA WASTEWATER FACILITY",
+    "FAIRBANKS NORTH STAR BOROUGH LANDFILL",
+    "SITKA CITY OF MUNICIPAL LANDFILL",
+    "KODIAK ISLAND BOROUGH LANDFILL",
+    "YAKUTAT BOROUGH LANDFILL",
+    "KENAI PENINSULA BOROUGH - CENTRAL PENINSULA LANDFILL",
+    "COFFMAN COVE WASTEWATER COLLECTION SYSTEM",
+    "CORDOVA WASTEWATER TREATMENT PLANT",
+    "JUNEAU DOUGLAS WASTEWATER TREATMENT PLANT",
+    "NORTH SLOPE BOROUGH BARROW LANDFILL",
+    "CITY OF KETCHIKAN INERT LANDFILL & MSW TS",
+    "CITY OF SITKA LANDFILL",
+    "CITY OF WRANGELL LANDFILL",
+    "AUKE BAY WASTEWATER TREATMENT FACILITY",
+    "GALENA WATER AND WASTEWATER PLANT",
+    "TOGIAK WASTEWATER TREATMENT FACILITY",
+    "PILOT STATION WASTEWATER LAGOON",
+    "ANCHORAGE WASTEWATER UTILITY",
+    "NOORVIK WASTEWATER FACILITY"
+  ],
+  "rules": {
+    "name_keywords": [
+      "PUBLIC WATER",
+      "DRINKING WATER",
+      "WASTEWATER",
+      "STORMWATER",
+      "SEWER",
+      "SANITARY",
+      "UTILITY",
+      "MUNICIPAL",
+      "AUTHORITY",
+      "TOWNSHIP",
+      "BOROUGH",
+      "CITY OF",
+      "VILLAGE OF",
+      "DEPARTMENT OF PUBLIC WORKS",
+      "DPW",
+      "PUMP STATION",
+      "LIFT STATION",
+      "TRANSFER STATION",
+      "RECYCLING CENTER",
+      "RECYCLING FACILITY",
+      "MATERIALS RECOVERY FACILITY",
+      "WATER",
+      "WELL"
+    ],
+    "contextual_name_rules": {
+      "TREATMENT PLANT_requires_any": [
+        "WATER",
+        "WASTEWATER",
+        "SEWER",
+        "SANITARY",
+        "PUBLIC WATER",
+        "DRINKING WATER",
+        "STORMWATER"
+      ],
+      "DISTRIBUTION_requires_any": [
+        "WATER",
+        "WASTEWATER",
+        "SEWER",
+        "SANITARY",
+        "PUBLIC WATER",
+        "DRINKING WATER",
+        "STORMWATER"
+      ]
+    },
+    "program_keywords": [
+      "PUBLIC WATER SYSTEM",
+      "SDWIS",
+      "PWS"
+    ],
+    "naics_prefixes": [
+      "2213",
+      "22131",
+      "22132",
+      "22133"
+    ]
+  }
+}

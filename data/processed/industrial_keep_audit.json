@@ -1,0 +1,77 @@
+{
+  "timestamp": "2026-03-01T01:51:36.323930+00:00",
+  "method": "rebuild_industrial_reduced_no_program.py",
+  "kept_rows": 44444,
+  "kept_top_keywords": [
+    {
+      "keyword": "WASTE",
+      "count": 16294
+    },
+    {
+      "keyword": "CHEM",
+      "count": 13739
+    },
+    {
+      "keyword": "LANDFILL",
+      "count": 12253
+    },
+    {
+      "keyword": "PETRO",
+      "count": 11399
+    },
+    {
+      "keyword": "COATING",
+      "count": 4459
+    },
+    {
+      "keyword": "REFIN",
+      "count": 3625
+    },
+    {
+      "keyword": "PLATING",
+      "count": 3083
+    },
+    {
+      "keyword": "POLY",
+      "count": 2264
+    },
+    {
+      "keyword": "INCIN",
+      "count": 788
+    },
+    {
+      "keyword": "SOLVENT",
+      "count": 284
+    }
+  ],
+  "keep_keywords": [
+    "CHEM",
+    "REFIN",
+    "PETRO",
+    "PLATING",
+    "COATING",
+    "PULP",
+    "PAPER",
+    "LANDFILL",
+    "WASTE",
+    "INCIN",
+    "SOLVENT",
+    "POLY",
+    "FLUOR",
+    "AFFF",
+    "FIRE FOAM"
+  ],
+  "denylist_tokens": [
+    "POLYNESIAN",
+    "NEWSPAPER",
+    "PAPERWORK"
+  ],
+  "context_rules": {
+    "PAPER": {
+      "requires_any_tokens": [
+        "MILL",
+        "PULP"
+      ]
+    }
+  }
+}

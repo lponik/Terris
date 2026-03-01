@@ -7,9 +7,6 @@ __pycache__/
 data/raw/*
 !data/raw/.gitkeep
 
-data/processed/*
-!data/processed/.gitkeep
-
 # Local artifacts
 .DS_Store
 

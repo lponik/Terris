@@ -1,0 +1,206 @@
+{
+  "generated_at_utc": "2026-03-01T01:51:36.322556+00:00",
+  "datasets": {
+    "industrial_frs": {
+      "rows_written": 44444,
+      "dropped_rows": 1097923
+    },
+    "landfill": {
+      "rows_written": 2323,
+      "dropped_rows": 0
+    },
+    "military_base": {
+      "rows_written": 163,
+      "dropped_rows": 0
+    },
+    "superfund_npl": {
+      "rows_written": 2116,
+      "dropped_rows": 0
+    }
+  },
+  "reduction_method": {
+    "stage1": "keyword filter + low-signal utility/water facility exclusion",
+    "stage2": "grid cap 0.05deg max 5/cell"
+  },
+  "rows_scanned": 5215556,
+  "rows_stage1_kept": 68764,
+  "rows_stage2_kept": 44444,
+  "rows_stage2_capped": 13839,
+  "low_signal_filter_enabled": true,
+  "removed_low_signal": 10481,
+  "industrial_low_signal_rules": {
+    "name_keywords": [
+      "PUBLIC WATER",
+      "DRINKING WATER",
+      "WASTEWATER",
+      "STORMWATER",
+      "SEWER",
+      "SANITARY",
+      "UTILITY",
+      "MUNICIPAL",
+      "AUTHORITY",
+      "TOWNSHIP",
+      "BOROUGH",
+      "CITY OF",
+      "VILLAGE OF",
+      "DEPARTMENT OF PUBLIC WORKS",
+      "DPW",
+      "PUMP STATION",
+      "LIFT STATION",
+      "TRANSFER STATION",
+      "RECYCLING CENTER",
+      "RECYCLING FACILITY",
+      "MATERIALS RECOVERY FACILITY",
+      "WATER",
+      "WELL"
+    ],
+    "contextual_name_rules": {
+      "TREATMENT PLANT_requires_any": [
+        "WATER",
+        "WASTEWATER",
+        "SEWER",
+        "SANITARY",
+        "PUBLIC WATER",
+        "DRINKING WATER",
+        "STORMWATER"
+      ],
+      "DISTRIBUTION_requires_any": [
+        "WATER",
+        "WASTEWATER",
+        "SEWER",
+        "SANITARY",
+        "PUBLIC WATER",
+        "DRINKING WATER",
+        "STORMWATER"
+      ]
+    },
+    "program_keywords": [
+      "PUBLIC WATER SYSTEM",
+      "SDWIS",
+      "PWS"
+    ],
+    "naics_prefixes": [
+      "2213",
+      "22131",
+      "22132",
+      "22133"
+    ]
+  },
+  "industrial_keep_keywords": [
+    "CHEM",
+    "REFIN",
+    "PETRO",
+    "PLATING",
+    "COATING",
+    "PULP",
+    "PAPER",
+    "LANDFILL",
+    "WASTE",
+    "INCIN",
+    "SOLVENT",
+    "POLY",
+    "FLUOR",
+    "AFFF",
+    "FIRE FOAM"
+  ],
+  "industrial_keep_matcher_rules": {
+    "short_keyword_mode": "token_startswith",
+    "denylist_tokens": [
+      "POLYNESIAN",
+      "NEWSPAPER",
+      "PAPERWORK"
+    ],
+    "context_rules": {
+      "PAPER": {
+        "requires_any_tokens": [
+          "MILL",
+          "PULP"
+        ]
+      }
+    }
+  },
+  "keep_top_keywords": [
+    {
+      "keyword": "WASTE",
+      "count": 16294
+    },
+    {
+      "keyword": "CHEM",
+      "count": 13739
+    },
+    {
+      "keyword": "LANDFILL",
+      "count": 12253
+    },
+    {
+      "keyword": "PETRO",
+      "count": 11399
+    },
+    {
+      "keyword": "COATING",
+      "count": 4459
+    },
+    {
+      "keyword": "REFIN",
+      "count": 3625
+    },
+    {
+      "keyword": "PLATING",
+      "count": 3083
+    },
+    {
+      "keyword": "POLY",
+      "count": 2264
+    },
+    {
+      "keyword": "INCIN",
+      "count": 788
+    },
+    {
+      "keyword": "SOLVENT",
+      "count": 284
+    }
+  ],
+  "top_states_by_count": [
+    {
+      "state": "CA",
+      "count": 4615
+    },
+    {
+      "state": "TX",
+      "count": 3233
+    },
+    {
+      "state": "NY",
+      "count": 1841
+    },
+    {
+      "state": "IL",
+      "count": 1715
+    },
+    {
+      "state": "OH",
+      "count": 1674
+    },
+    {
+      "state": "FL",
+      "count": 1563
+    },
+    {
+      "state": "NJ",
+      "count": 1432
+    },
+    {
+      "state": "PA",
+      "count": 1397
+    },
+    {
+      "state": "GA",
+      "count": 1320
+    },
+    {
+      "state": "MI",
+      "count": 1283
+    }
+  ]
+}
