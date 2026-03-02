@@ -1,10 +1,10 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import Sidebar from "@/components/Sidebar";
-import { analyzePoint, generateReport, getApiBaseUrl, getErrorMessage, health } from "@/lib/api";
+import { analyzePoint, generateReport, getErrorMessage } from "@/lib/api";
 import { getGeocodeErrorMessage, inferSearchZoom, searchUsLocations } from "@/lib/geocode";
 import type {
   ActiveEvidence,
@@ -13,7 +13,6 @@ import type {
   EvidenceItem,
   HeatMode,
   HeatPoint,
-  HealthResponse,
   LatLon,
   MapFocusRequest,
   ReportResponse,
@@ -158,9 +157,6 @@ export default function HomePage() {
   const [reportError, setReportError] = useState<string | null>(null);
 
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
-
-  const [healthState, setHealthState] = useState<HealthResponse | null>(null);
-  const [healthError, setHealthError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -459,61 +455,6 @@ export default function HomePage() {
     };
   }, [heatMode]);
 
-  useEffect(() => {
-    let active = true;
-
-    const pollHealth = async () => {
-      try {
-        const response = await health();
-        if (!active) {
-          return;
-        }
-        setHealthState(response);
-        setHealthError(null);
-      } catch (error) {
-        if (!active) {
-          return;
-        }
-        setHealthError(getErrorMessage(error));
-      }
-    };
-
-    void pollHealth();
-    const intervalId = setInterval(() => {
-      void pollHealth();
-    }, 30_000);
-
-    return () => {
-      active = false;
-      clearInterval(intervalId);
-    };
-  }, []);
-
-  const backendHealthy = useMemo(() => {
-    if (!healthState && !healthError) {
-      return null;
-    }
-
-    if (healthError) {
-      return false;
-    }
-
-    return Boolean(healthState?.status === "ok" && healthState.dataset_loaded);
-  }, [healthState, healthError]);
-
-  const backendStatusLabel = useMemo(() => {
-    if (healthError) {
-      return `Backend unreachable (${healthError})`;
-    }
-    if (!healthState) {
-      return "Checking backend health...";
-    }
-    if (!healthState.dataset_loaded) {
-      return "Backend online, dataset not loaded";
-    }
-    return "Backend healthy";
-  }, [healthState, healthError]);
-
   const showSearchDropdown =
     isSearchOpen &&
     (isSearching || searchResults.length > 0 || Boolean(searchError) || searchQuery.trim().length >= 2);
@@ -637,9 +578,6 @@ export default function HomePage() {
             onToggleReportFocusMode={() => setIsReportFocusMode((current) => !current)}
             lastUpdated={lastUpdated}
             isCached={Boolean(analysis?.meta?.cached)}
-            backendStatusLabel={backendStatusLabel}
-            backendHealthy={backendHealthy}
-            apiBaseUrl={getApiBaseUrl()}
             onEvidenceSelect={handleEvidenceSelect}
           />
         </section>

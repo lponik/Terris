@@ -19,9 +19,6 @@ interface SidebarProps {
   onToggleReportFocusMode: () => void;
   lastUpdated: string | null;
   isCached?: boolean;
-  backendStatusLabel: string;
-  backendHealthy: boolean | null;
-  apiBaseUrl: string;
   onEvidenceSelect: (category: EvidenceCategory, item: EvidenceItem, index: number) => void;
 }
 
@@ -56,9 +53,6 @@ export default function Sidebar({
   onToggleReportFocusMode,
   lastUpdated,
   isCached = false,
-  backendStatusLabel,
-  backendHealthy,
-  apiBaseUrl,
   onEvidenceSelect,
 }: SidebarProps) {
   const hasSelection = Boolean(selectedPoint);
@@ -431,23 +425,7 @@ export default function Sidebar({
       </div>
 
       <footer className="border-t border-border bg-panelSoft px-5 py-3 text-xs text-muted">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                backendHealthy == null
-                  ? "bg-muted/50"
-                  : backendHealthy
-                    ? "bg-low"
-                    : "bg-high"
-              }`}
-            />
-            <span>{backendStatusLabel}</span>
-          </div>
-          <span>
-            Last updated: {formatTimestamp(lastUpdated)}
-            {isCached ? " (cached)" : ""}
-          </span>
+        <div className="flex items-center justify-end gap-3">
         </div>
       </footer>
     </aside>
