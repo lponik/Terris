@@ -114,11 +114,11 @@ Implementation source:
 
 ```mermaid
 flowchart LR
-  A[Raw Source Files\ndata/raw] --> B[Pipeline Scripts\nscripts/*.py]
-  B --> C[Processed Dataset\ndata/processed/all_sites.csv]
-  C --> D[FastAPI Backend\nstartup load + BallTree index]
-  D --> E[/analyze + /report\ndeterministic responses]
-  E --> F[Next.js Frontend\nMap, score, evidence, report UI]
+  A["Raw Source Files<br/>data/raw"] --> B["Pipeline Scripts<br/>scripts/"]
+  B --> C["Processed Dataset<br/>data/processed/all_sites.csv"]
+  C --> D["FastAPI Backend<br/>startup load + BallTree index"]
+  D --> E["Analyze + Report Endpoints<br/>deterministic responses"]
+  E --> F["Next.js Frontend<br/>map, score, evidence, report UI"]
 ```
 
 ### Runtime Components
