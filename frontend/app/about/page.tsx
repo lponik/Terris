@@ -1,3 +1,5 @@
+import ScrollReveal from "@/components/ScrollReveal";
+
 const aboutSections = [
   {
     title: "Data Sources",
@@ -20,16 +22,6 @@ const aboutSections = [
       "These signals are combined into a 0-10 Environmental Exposure Proxy Score.",
       "A transparent evidence list shows exactly which nearby records contributed to the result.",
       "The scoring system is deterministic - meaning the same location always produces the same result, based strictly on the data.",
-    ],
-    caution: "",
-  },
-  {
-    title: "Report Explanation",
-    summary: "Terris provides clear, structured explanations using deterministic scoring signals.",
-    details: [
-      "The score itself is always computed deterministically by the backend.",
-      "Explanations are generated from the same fixed proximity and density inputs.",
-      "The report adds context - not authority.",
     ],
     caution: "",
   },
@@ -72,38 +64,35 @@ export default function AboutPage() {
           </p>
         </header>
 
-        <section className="space-y-5">
+        <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {aboutSections.map((section, index) => (
-            <article
-              key={section.title}
-              tabIndex={0}
-              className="group animate-revealUp rounded-2xl border border-border bg-panel/52 p-6 text-center transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:border-accent/45 hover:bg-panel/70 hover:shadow-[0_0_0_1px_rgba(15,111,67,0.34),0_22px_54px_rgba(15,111,67,0.24)] focus:outline-none focus-visible:-translate-y-1 focus-visible:border-accent/45 focus-visible:bg-panel/70 focus-visible:shadow-[0_0_0_1px_rgba(15,111,67,0.34),0_22px_54px_rgba(15,111,67,0.24)]"
-              style={{ animationDelay: `${80 + index * 55}ms` }}
-            >
-              <div className="flex items-start justify-center gap-4">
-                <h2 className="text-lg font-semibold text-ink md:text-xl">{section.title}</h2>
-              </div>
+            <ScrollReveal key={section.title} className="h-full" delayMs={index * 70}>
+              <article
+                tabIndex={0}
+                className="group flex h-full flex-col rounded-2xl border border-border bg-panel/58 p-5 text-left transform-gpu will-change-transform transition-[transform,box-shadow,border-color,background-color] duration-[520ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:z-10 hover:-translate-y-1.5 hover:scale-[1.035] hover:border-accent/45 hover:bg-panel/74 hover:shadow-[0_0_0_1px_rgba(15,111,67,0.32),0_24px_56px_rgba(7,19,12,0.36)] focus:outline-none focus-visible:z-10 focus-visible:-translate-y-1.5 focus-visible:scale-[1.035] focus-visible:border-accent/45 focus-visible:bg-panel/74 focus-visible:shadow-[0_0_0_1px_rgba(15,111,67,0.32),0_24px_56px_rgba(7,19,12,0.36)] motion-reduce:transform-none motion-reduce:transition-none md:min-h-[320px] md:p-6"
+              >
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted/95">{`0${index + 1}`}</p>
+                <h2 className="mt-2 text-2xl font-semibold leading-tight text-ink">{section.title}</h2>
+                <p className="mt-3 text-base leading-relaxed text-muted md:text-lg">{section.summary}</p>
 
-              <p className="mt-3 text-base leading-relaxed text-muted md:text-lg">{section.summary}</p>
-
-              <div className="mt-0 max-h-0 overflow-hidden opacity-0 transition-[max-height,opacity,margin,transform] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] -translate-y-1 group-hover:mt-4 group-hover:max-h-[700px] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:mt-4 group-focus-within:max-h-[700px] group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                <ul className="space-y-2.5">
+                <ul className="mt-4 space-y-2.5">
                   {section.details.map((detail) => (
                     <li
                       key={detail}
-                      className="rounded-lg bg-panelSoft/55 px-3.5 py-2.5 text-base text-center text-ink md:text-lg"
+                      className="rounded-lg bg-panelSoft/56 px-3 py-2 text-base leading-relaxed text-ink/95 md:text-[1.03rem]"
                     >
                       {detail}
                     </li>
                   ))}
                 </ul>
+
                 {section.caution ? (
-                  <p className="mt-3 rounded-lg border border-border bg-panel/65 px-3.5 py-2.5 text-sm text-center text-muted md:text-base">
+                  <p className="mt-4 rounded-lg border border-border bg-panel/70 px-3 py-2 text-base leading-relaxed text-muted md:text-[1.03rem]">
                     {section.caution}
                   </p>
                 ) : null}
-              </div>
-            </article>
+              </article>
+            </ScrollReveal>
           ))}
         </section>
       </div>
