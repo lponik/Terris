@@ -6,7 +6,9 @@ import type {
 } from "./types";
 
 const DEFAULT_BASE_URL = "http://localhost:8000";
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 20_000;
+const MAX_RETRIES = 1;
+const RETRY_DELAY_MS = 750;
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") || DEFAULT_BASE_URL;
@@ -55,42 +57,58 @@ function extractErrorMessage(body: unknown): string | null {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let attempt = 0;
 
-  try {
-    const response = await fetch(`${apiBaseUrl}${path}`, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        ...(init?.headers || {}),
-      },
-      cache: "no-store",
-    });
+  while (attempt <= MAX_RETRIES) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    const raw = await response.text();
-    const parsed = raw ? safeParseJson(raw) : null;
+    try {
+      const response = await fetch(`${apiBaseUrl}${path}`, {
+        ...init,
+        signal: controller.signal,
+        headers: {
+          "Content-Type": "application/json",
+          ...(init?.headers || {}),
+        },
+        cache: "no-store",
+      });
 
-    if (!response.ok) {
-      const message =
-        extractErrorMessage(parsed) ||
-        `Request failed with status ${response.status}`;
-      throw new ApiError(message, response.status, parsed);
+      const raw = await response.text();
+      const parsed = raw ? safeParseJson(raw) : null;
+
+      if (!response.ok) {
+        const message =
+          extractErrorMessage(parsed) ||
+          `Request failed with status ${response.status}`;
+        throw new ApiError(message, response.status, parsed);
+      }
+
+      return parsed as T;
+    } catch (error) {
+      const apiError =
+        error instanceof ApiError
+          ? error
+          : error instanceof DOMException && error.name === "AbortError"
+            ? new ApiError(
+                `Request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`,
+                408,
+              )
+            : new ApiError("Network request failed.", undefined, error);
+
+      const isRetriable = apiError.status === 408 || apiError.status == null;
+      if (attempt < MAX_RETRIES && isRetriable) {
+        attempt += 1;
+        await delay(RETRY_DELAY_MS * attempt);
+        continue;
+      }
+      throw apiError;
+    } finally {
+      clearTimeout(timeoutId);
     }
-
-    return parsed as T;
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ApiError("Request timed out after 10 seconds.", 408);
-    }
-    throw new ApiError("Network request failed.", undefined, error);
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  throw new ApiError("Network request failed.");
 }
 
 function safeParseJson(raw: string): unknown {
@@ -99,6 +117,10 @@ function safeParseJson(raw: string): unknown {
   } catch {
     return raw;
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function getApiBaseUrl(): string {
