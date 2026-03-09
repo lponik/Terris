@@ -51,5 +51,5 @@ This frontend expects these endpoints:
 ## Notes
 
 - Map defaults to continental U.S. center (`39.5, -98.35`, zoom `4`).
-- Analyze requests timeout after 10 seconds.
+- Analyze/report requests timeout after 20 seconds and retry once on timeout/network failures.
 - UI shows loading states, error states, backend health, and last-updated timestamp.
