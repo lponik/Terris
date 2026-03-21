@@ -4,7 +4,14 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import Sidebar from "@/components/Sidebar";
-import { analyzePoint, generateReport, getErrorMessage } from "@/lib/api";
+import {
+  ApiError,
+  analyzePoint,
+  generateReport,
+  getErrorMessage,
+  health,
+  isBackendWarmSession,
+} from "@/lib/api";
 import { getGeocodeErrorMessage, inferSearchZoom, searchUsLocations } from "@/lib/geocode";
 import type {
   ActiveEvidence,
@@ -30,6 +37,36 @@ type HeatDataMode = Exclude<HeatMode, "off">;
 
 const MAX_COMBINED_HEAT_POINTS = 45_000;
 const ANALYZE_FOCUS_ZOOM = 11;
+
+function formatErrorWithClass(error: unknown): string {
+  const message = getErrorMessage(error);
+  if (error instanceof ApiError) {
+    return `${message} (class: ${error.kind})`;
+  }
+  return message;
+}
+
+function logApiTelemetry(event: string, error: unknown): void {
+  const timestamp = new Date().toISOString();
+  if (error instanceof ApiError) {
+    console.info("api_telemetry", {
+      event,
+      timestamp,
+      kind: error.kind,
+      status: error.status ?? null,
+      message: error.message,
+    });
+    return;
+  }
+
+  console.info("api_telemetry", {
+    event,
+    timestamp,
+    kind: "unknown",
+    status: null,
+    message: error instanceof Error ? error.message : String(error),
+  });
+}
 
 function normalizeHeatPoints(payload: unknown): HeatPoint[] {
   if (!Array.isArray(payload)) {
@@ -155,6 +192,10 @@ export default function HomePage() {
 
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
+  const [analysisErrorKind, setAnalysisErrorKind] = useState<string | null>(null);
+  const [reportErrorKind, setReportErrorKind] = useState<string | null>(null);
+  const [isBackendWarming, setIsBackendWarming] = useState<boolean>(() => !isBackendWarmSession());
+  const [backendWarmupWarning, setBackendWarmupWarning] = useState<string | null>(null);
 
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
@@ -182,6 +223,7 @@ export default function HomePage() {
     const runId = ++analyzeRunId.current;
     setIsAnalyzing(true);
     setAnalysisError(null);
+    setAnalysisErrorKind(null);
 
     try {
       const response = await analyzePoint(point.lat, point.lon);
@@ -191,11 +233,15 @@ export default function HomePage() {
 
       setAnalysis(response);
       setLastUpdated(response.meta?.timestamp_utc ?? new Date().toISOString());
+      setIsBackendWarming(false);
+      setBackendWarmupWarning(null);
     } catch (error) {
       if (runId !== analyzeRunId.current) {
         return;
       }
-      setAnalysisError(getErrorMessage(error));
+      setAnalysisError(formatErrorWithClass(error));
+      setAnalysisErrorKind(error instanceof ApiError ? error.kind : "unknown");
+      logApiTelemetry("analyze_error", error);
     } finally {
       if (runId === analyzeRunId.current) {
         setIsAnalyzing(false);
@@ -212,9 +258,11 @@ export default function HomePage() {
       setSelectedPoint(point);
       setAnalysis(null);
       setAnalysisError(null);
+      setAnalysisErrorKind(null);
       setLastUpdated(null);
       setReport(null);
       setReportError(null);
+      setReportErrorKind(null);
       setIsReportFocusMode(false);
       setActiveEvidence(null);
     },
@@ -247,6 +295,7 @@ export default function HomePage() {
 
     setIsGeneratingReport(true);
     setReportError(null);
+    setReportErrorKind(null);
 
     try {
       const response = await generateReport({
@@ -255,11 +304,50 @@ export default function HomePage() {
       });
       setReport(response);
     } catch (error) {
-      setReportError(getErrorMessage(error));
+      setReportError(formatErrorWithClass(error));
+      setReportErrorKind(error instanceof ApiError ? error.kind : "unknown");
+      logApiTelemetry("report_error", error);
     } finally {
       setIsGeneratingReport(false);
     }
   }, [analysis, selectedPoint]);
+
+  useEffect(() => {
+    let active = true;
+    if (isBackendWarmSession()) {
+      setIsBackendWarming(false);
+      setBackendWarmupWarning(null);
+      return () => {
+        active = false;
+      };
+    }
+
+    setIsBackendWarming(true);
+    setBackendWarmupWarning(null);
+
+    void health()
+      .then(() => {
+        if (!active) {
+          return;
+        }
+        setIsBackendWarming(false);
+        setBackendWarmupWarning(null);
+      })
+      .catch((error) => {
+        if (!active) {
+          return;
+        }
+        setIsBackendWarming(false);
+        setBackendWarmupWarning(
+          "Warm-up check failed. Analyze is still available, but the first request may take up to ~1 minute.",
+        );
+        logApiTelemetry("warmup_error", error);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const handleSearchSelect = useCallback(
     (result: GeocodeResult) => {
@@ -473,6 +561,26 @@ export default function HomePage() {
         <section
           className="report-map-shell animate-revealUp flex min-h-0 flex-col gap-3 lg:col-span-1"
         >
+          {isBackendWarming ? (
+            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-sm text-muted">
+              Backend waking up, first request may take up to ~1 minute.
+            </div>
+          ) : null}
+          {backendWarmupWarning ? (
+            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-sm text-muted">
+              {backendWarmupWarning}
+            </div>
+          ) : null}
+          {analysisErrorKind ? (
+            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-xs text-muted">
+              Analyze error class: {analysisErrorKind}
+            </div>
+          ) : null}
+          {reportErrorKind ? (
+            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-xs text-muted">
+              Report error class: {reportErrorKind}
+            </div>
+          ) : null}
           <div className="relative min-h-0 flex-1">
             <DynamicMap
               selectedPoint={selectedPoint}

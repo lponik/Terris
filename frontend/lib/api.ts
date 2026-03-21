@@ -6,23 +6,68 @@ import type {
 } from "./types";
 
 const DEFAULT_BASE_URL = "http://localhost:8000";
-const REQUEST_TIMEOUT_MS = 20_000;
-const MAX_RETRIES = 1;
-const RETRY_DELAY_MS = 750;
+const COLD_REQUEST_TIMEOUT_MS = 75_000;
+const WARM_REQUEST_TIMEOUT_MS = 20_000;
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_BASE_MS = 600;
+const RETRY_DELAY_JITTER_MS = 300;
+const RETRIABLE_HTTP_STATUS_CODES = new Set([502, 503, 504]);
 
 const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") || DEFAULT_BASE_URL;
 
+export type ApiErrorKind = "timeout" | "network" | "http_4xx" | "http_5xx";
+
+let isBackendWarm = false;
+
 export class ApiError extends Error {
+  kind: ApiErrorKind;
   status?: number;
   details?: unknown;
 
-  constructor(message: string, status?: number, details?: unknown) {
+  constructor(kind: ApiErrorKind, message: string, status?: number, details?: unknown) {
     super(message);
     this.name = "ApiError";
+    this.kind = kind;
     this.status = status;
     this.details = details;
   }
+}
+
+function getErrorKindForStatus(status: number): ApiErrorKind {
+  if (status >= 500) {
+    return "http_5xx";
+  }
+  return "http_4xx";
+}
+
+function markBackendWarm(path: string): void {
+  if (isBackendWarm) {
+    return;
+  }
+  if (path === "/health" || path === "/analyze") {
+    isBackendWarm = true;
+  }
+}
+
+function getRequestTimeoutMs(): number {
+  return isBackendWarm ? WARM_REQUEST_TIMEOUT_MS : COLD_REQUEST_TIMEOUT_MS;
+}
+
+function getRetryDelayMs(attempt: number): number {
+  const exponentialBase = RETRY_DELAY_BASE_MS * 2 ** (attempt - 1);
+  const jitter = Math.floor(Math.random() * RETRY_DELAY_JITTER_MS);
+  return exponentialBase + jitter;
+}
+
+function isRetriableError(error: ApiError): boolean {
+  if (error.kind === "timeout" || error.kind === "network") {
+    return true;
+  }
+  if (error.status != null && RETRIABLE_HTTP_STATUS_CODES.has(error.status)) {
+    return true;
+  }
+  return false;
 }
 
 function extractErrorMessage(body: unknown): string | null {
@@ -57,11 +102,11 @@ function extractErrorMessage(body: unknown): string | null {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  let attempt = 0;
-
-  while (attempt <= MAX_RETRIES) {
+  let attempt = 1;
+  while (attempt <= MAX_ATTEMPTS) {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    const timeoutMs = getRequestTimeoutMs();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(`${apiBaseUrl}${path}`, {
@@ -81,9 +126,15 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
         const message =
           extractErrorMessage(parsed) ||
           `Request failed with status ${response.status}`;
-        throw new ApiError(message, response.status, parsed);
+        throw new ApiError(
+          getErrorKindForStatus(response.status),
+          message,
+          response.status,
+          parsed,
+        );
       }
 
+      markBackendWarm(path);
       return parsed as T;
     } catch (error) {
       const apiError =
@@ -91,15 +142,17 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
           ? error
           : error instanceof DOMException && error.name === "AbortError"
             ? new ApiError(
-                `Request timed out after ${REQUEST_TIMEOUT_MS / 1000} seconds.`,
+                "timeout",
+                `Request timed out after ${timeoutMs / 1000} seconds.`,
                 408,
               )
-            : new ApiError("Network request failed.", undefined, error);
+            : new ApiError("network", "Network request failed.", undefined, error);
 
-      const isRetriable = apiError.status === 408 || apiError.status == null;
-      if (attempt < MAX_RETRIES && isRetriable) {
+      const hasMoreAttempts = attempt < MAX_ATTEMPTS;
+      if (hasMoreAttempts && isRetriableError(apiError)) {
+        const delayMs = getRetryDelayMs(attempt);
         attempt += 1;
-        await delay(RETRY_DELAY_MS * attempt);
+        await delay(delayMs);
         continue;
       }
       throw apiError;
@@ -108,7 +161,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     }
   }
 
-  throw new ApiError("Network request failed.");
+  throw new ApiError("network", "Network request failed.");
 }
 
 function safeParseJson(raw: string): unknown {
@@ -125,6 +178,10 @@ function delay(ms: number): Promise<void> {
 
 export function getApiBaseUrl(): string {
   return apiBaseUrl;
+}
+
+export function isBackendWarmSession(): boolean {
+  return isBackendWarm;
 }
 
 export function health(): Promise<HealthResponse> {
