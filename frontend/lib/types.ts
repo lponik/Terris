@@ -88,6 +88,9 @@ export interface HealthResponse {
   dataset_loaded: boolean;
   version?: string;
   timestamp_utc?: string;
+  ready?: boolean;
+  uptime_seconds?: number;
+  startup_total_seconds?: number;
 }
 
 export interface ReportDriver {

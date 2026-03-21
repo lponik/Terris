@@ -10,7 +10,9 @@ from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from threading import RLock
+from time import perf_counter
 from typing import Any
+from uuid import uuid4
 
 try:
     import resource
@@ -210,7 +212,31 @@ def _get_cache(request: Request) -> AnalysisCache:
     return cache
 
 
-def _analyze_with_cache(request: Request, lat: float, lon: float) -> AnalyzeResponse:
+def _get_request_id(request: Request) -> str:
+    header_request_id = request.headers.get("x-request-id", "").strip()
+    return header_request_id or str(uuid4())
+
+
+def _is_app_ready(request: Request) -> bool:
+    required_state_keys = ("store", "settings", "analysis_cache", "startup_time", "startup_total_seconds")
+    return all(hasattr(request.app.state, key) for key in required_state_keys)
+
+
+def _get_uptime_seconds(request: Request) -> float | None:
+    startup_time = getattr(request.app.state, "startup_time", None)
+    if not isinstance(startup_time, datetime):
+        return None
+    return round((_utcnow() - startup_time).total_seconds(), 3)
+
+
+def _get_startup_total_seconds(request: Request) -> float | None:
+    startup_total = getattr(request.app.state, "startup_total_seconds", None)
+    if isinstance(startup_total, (int, float)):
+        return round(float(startup_total), 3)
+    return None
+
+
+def _analyze_with_cache_meta(request: Request, lat: float, lon: float) -> tuple[AnalyzeResponse, bool]:
     store = _get_store(request)
     current_settings = _get_settings(request)
     cache = _get_cache(request)
@@ -222,10 +248,15 @@ def _analyze_with_cache(request: Request, lat: float, lon: float) -> AnalyzeResp
 
     cached = cache.get(cache_key)
     if cached is not None:
-        return cached
+        return cached, True
 
     response = _build_analyze_response(store=store, settings=current_settings, lat=lat, lon=lon)
     cache.set(cache_key, response)
+    return response, False
+
+
+def _analyze_with_cache(request: Request, lat: float, lon: float) -> AnalyzeResponse:
+    response, _ = _analyze_with_cache_meta(request=request, lat=lat, lon=lon)
     return response
 
 
@@ -271,6 +302,7 @@ settings = load_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    startup_time = _utcnow()
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s | %(message)s",
@@ -290,6 +322,9 @@ async def lifespan(app: FastAPI):
     app.state.store = store
     app.state.settings = settings
     app.state.analysis_cache = AnalysisCache(maxsize=settings.cache_size)
+    app.state.startup_time = startup_time
+    app.state.startup_total_seconds = store.stats.startup_total_seconds
+    app.state.first_analyze_success_logged = False
 
     rss_mb = _process_rss_mb()
     if rss_mb is not None:
@@ -371,14 +406,31 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
 @app.get("/health", response_model=HealthResponse)
 def health(request: Request) -> HealthResponse:
+    request_id = _get_request_id(request)
+    start = perf_counter()
     loaded = hasattr(request.app.state, "store")
+    ready = _is_app_ready(request)
+    uptime_seconds = _get_uptime_seconds(request)
+    startup_total_seconds = _get_startup_total_seconds(request)
     current_settings = getattr(request.app.state, "settings", settings)
-    return HealthResponse(
+    response = HealthResponse(
         status="ok",
         dataset_loaded=bool(loaded),
         version=current_settings.version,
         timestamp_utc=_utcnow(),
+        ready=ready,
+        uptime_seconds=uptime_seconds,
+        startup_total_seconds=startup_total_seconds,
     )
+    duration_ms = round((perf_counter() - start) * 1000.0, 2)
+    logger.info(
+        "health_request request_id=%s ready=%s dataset_loaded=%s duration_ms=%.2f",
+        request_id,
+        ready,
+        bool(loaded),
+        duration_ms,
+    )
+    return response
 
 
 @app.get("/stats", response_model=StatsResponse)
@@ -409,18 +461,45 @@ def stats(request: Request) -> StatsResponse:
 
 @app.post("/analyze", response_model=AnalyzeResponse)
 def analyze(request: Request, payload: AnalyzeRequest) -> AnalyzeResponse:
-    _validate_coordinates_or_400(payload.lat, payload.lon)
+    request_id = _get_request_id(request)
+    start = perf_counter()
+    cache_hit = False
+    outcome = "success"
     try:
-        return _analyze_with_cache(request=request, lat=payload.lat, lon=payload.lon)
-    except HTTPException:
+        _validate_coordinates_or_400(payload.lat, payload.lon)
+        response, cache_hit = _analyze_with_cache_meta(request=request, lat=payload.lat, lon=payload.lon)
+        if not bool(getattr(request.app.state, "first_analyze_success_logged", False)):
+            uptime_seconds = _get_uptime_seconds(request)
+            logger.info(
+                "analyze_first_success_after_startup request_id=%s uptime_seconds=%s",
+                request_id,
+                uptime_seconds if uptime_seconds is not None else "-",
+            )
+            request.app.state.first_analyze_success_logged = True
+        return response
+    except HTTPException as exc:
+        outcome = f"http_{exc.status_code}"
         raise
     except Exception:
+        outcome = "error"
         logger.exception(
-            "analyze_request_failed lat=%.6f lon=%.6f",
+            "analyze_request_failed request_id=%s lat=%.6f lon=%.6f",
+            request_id,
             payload.lat,
             payload.lon,
         )
         raise
+    finally:
+        duration_ms = round((perf_counter() - start) * 1000.0, 2)
+        logger.info(
+            "analyze_request request_id=%s lat=%.6f lon=%.6f cache_hit=%s outcome=%s duration_ms=%.2f",
+            request_id,
+            payload.lat,
+            payload.lon,
+            cache_hit,
+            outcome,
+            duration_ms,
+        )
 
 
 @app.post("/report", response_model=ReportResponse)

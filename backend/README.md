@@ -15,6 +15,11 @@ FastAPI backend for deterministic environmental exposure screening.
 - `POST /analyze`
 - `POST /report`
 
+`GET /health` now includes readiness hints:
+- `ready`
+- `uptime_seconds`
+- `startup_total_seconds`
+
 ## Environment Variables
 - `ENVIRONMENT`: `development` (default) or `production`
 - `FRONTEND_ORIGIN`: required in production (example: `https://terris.vercel.app`)
@@ -45,6 +50,14 @@ uvicorn backend.app.main:app --host 0.0.0.0 --port 10000
 ```
 
 Use `ENVIRONMENT=production` in Render and set `FRONTEND_ORIGIN` to the Vercel domain.
+
+## Deployment Verification Checklist
+- Confirm backend instance tier in Render and review restart logs around timeout windows.
+- Verify frontend + backend env vars are aligned:
+  - Frontend: `NEXT_PUBLIC_API_BASE_URL`
+  - Backend: `ENVIRONMENT=production`, `FRONTEND_ORIGIN`
+- Confirm Render health check path is set to `GET /health`.
+- Confirm frontend and backend are deployed in compatible regions to minimize first-request latency.
 
 ## Deterministic Report Notes
 `/report` returns a structured explanation based on score breakdown and proximity signals only.

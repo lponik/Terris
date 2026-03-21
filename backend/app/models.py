@@ -101,6 +101,9 @@ class HealthResponse(BaseModel):
     dataset_loaded: bool
     version: str
     timestamp_utc: datetime
+    ready: bool | None = None
+    uptime_seconds: float | None = None
+    startup_total_seconds: float | None = None
 
 
 class ReportRequest(BaseModel):
