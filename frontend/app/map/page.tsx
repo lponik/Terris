@@ -339,7 +339,7 @@ export default function HomePage() {
         }
         setIsBackendWarming(false);
         setBackendWarmupWarning(
-          "Warm-up check failed. Analyze is still available, but the first request may take up to ~1 minute.",
+          "Warm-up check failed. Analyze is still available, but the first request can take up to ~30 seconds and may retry once.",
         );
         logApiTelemetry("warmup_error", error);
       });
@@ -563,7 +563,7 @@ export default function HomePage() {
         >
           {isBackendWarming ? (
             <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-sm text-muted">
-              Backend waking up, first request may take up to ~1 minute.
+              Backend warm-up check in progress. If cold, first analyze may take up to ~30 seconds.
             </div>
           ) : null}
           {backendWarmupWarning ? (

@@ -59,6 +59,19 @@ Use `ENVIRONMENT=production` in Render and set `FRONTEND_ORIGIN` to the Vercel d
 - Confirm Render health check path is set to `GET /health`.
 - Confirm frontend and backend are deployed in compatible regions to minimize first-request latency.
 
+## Free-Tier Keep-Warm (UptimeRobot)
+If using Render free tier, configure an external monitor to prevent idle spin-down:
+
+- Monitor type: `HTTP(s)`
+- URL: `https://<your-backend>.onrender.com/health`
+- Method: `GET`
+- Monitoring interval: `10 minutes`
+- Request timeout: `30 seconds`
+- Expected status code: `200`
+- Optional keyword check: `"ready":true`
+
+This keeps startup latency low without sending synthetic `/analyze` traffic.
+
 ## Deterministic Report Notes
 `/report` returns a structured explanation based on score breakdown and proximity signals only.
 

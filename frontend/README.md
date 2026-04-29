@@ -52,7 +52,8 @@ This frontend expects these endpoints:
 
 - Map defaults to continental U.S. center (`39.5, -98.35`, zoom `4`).
 - Analyze/report requests use a cold-start-aware timeout policy:
-  - cold session: up to 75 seconds
-  - warm session: 20 seconds
-  - up to 3 total attempts with exponential backoff for timeout/network/502/503/504 failures
+  - `GET /health`: 10-second timeout, single attempt
+  - `POST /analyze`: 30-second cold timeout, 15-second warm timeout, up to 2 total attempts
+  - `POST /report`: 30-second cold timeout, 15-second warm timeout, up to 2 total attempts
+  - retries only for timeout/network/502/503/504 failures
 - UI shows loading states, error states, backend health, and last-updated timestamp.

@@ -6,9 +6,14 @@ import type {
 } from "./types";
 
 const DEFAULT_BASE_URL = "http://localhost:8000";
-const COLD_REQUEST_TIMEOUT_MS = 75_000;
-const WARM_REQUEST_TIMEOUT_MS = 20_000;
-const MAX_ATTEMPTS = 3;
+const HEALTH_TIMEOUT_MS = 10_000;
+const COLD_ANALYZE_TIMEOUT_MS = 30_000;
+const WARM_ANALYZE_TIMEOUT_MS = 15_000;
+const COLD_REPORT_TIMEOUT_MS = 30_000;
+const WARM_REPORT_TIMEOUT_MS = 15_000;
+const HEALTH_MAX_ATTEMPTS = 1;
+const ANALYZE_MAX_ATTEMPTS = 2;
+const REPORT_MAX_ATTEMPTS = 2;
 const RETRY_DELAY_BASE_MS = 600;
 const RETRY_DELAY_JITTER_MS = 300;
 const RETRIABLE_HTTP_STATUS_CODES = new Set([502, 503, 504]);
@@ -17,6 +22,13 @@ const apiBaseUrl =
   process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/+$/, "") || DEFAULT_BASE_URL;
 
 export type ApiErrorKind = "timeout" | "network" | "http_4xx" | "http_5xx";
+
+type RequestPolicy = {
+  coldTimeoutMs: number;
+  warmTimeoutMs: number;
+  maxAttempts: number;
+  markBackendWarm: boolean;
+};
 
 let isBackendWarm = false;
 
@@ -41,17 +53,48 @@ function getErrorKindForStatus(status: number): ApiErrorKind {
   return "http_4xx";
 }
 
-function markBackendWarm(path: string): void {
+function markBackendWarm(): void {
   if (isBackendWarm) {
     return;
   }
-  if (path === "/health" || path === "/analyze") {
-    isBackendWarm = true;
-  }
+  isBackendWarm = true;
 }
 
-function getRequestTimeoutMs(): number {
-  return isBackendWarm ? WARM_REQUEST_TIMEOUT_MS : COLD_REQUEST_TIMEOUT_MS;
+function getRequestPolicy(path: string): RequestPolicy {
+  if (path === "/health") {
+    return {
+      coldTimeoutMs: HEALTH_TIMEOUT_MS,
+      warmTimeoutMs: HEALTH_TIMEOUT_MS,
+      maxAttempts: HEALTH_MAX_ATTEMPTS,
+      markBackendWarm: false,
+    };
+  }
+  if (path === "/analyze") {
+    return {
+      coldTimeoutMs: COLD_ANALYZE_TIMEOUT_MS,
+      warmTimeoutMs: WARM_ANALYZE_TIMEOUT_MS,
+      maxAttempts: ANALYZE_MAX_ATTEMPTS,
+      markBackendWarm: true,
+    };
+  }
+  if (path === "/report") {
+    return {
+      coldTimeoutMs: COLD_REPORT_TIMEOUT_MS,
+      warmTimeoutMs: WARM_REPORT_TIMEOUT_MS,
+      maxAttempts: REPORT_MAX_ATTEMPTS,
+      markBackendWarm: false,
+    };
+  }
+  return {
+    coldTimeoutMs: COLD_ANALYZE_TIMEOUT_MS,
+    warmTimeoutMs: WARM_ANALYZE_TIMEOUT_MS,
+    maxAttempts: ANALYZE_MAX_ATTEMPTS,
+    markBackendWarm: false,
+  };
+}
+
+function getRequestTimeoutMs(policy: RequestPolicy): number {
+  return isBackendWarm ? policy.warmTimeoutMs : policy.coldTimeoutMs;
 }
 
 function getRetryDelayMs(attempt: number): number {
@@ -102,10 +145,11 @@ function extractErrorMessage(body: unknown): string | null {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const policy = getRequestPolicy(path);
   let attempt = 1;
-  while (attempt <= MAX_ATTEMPTS) {
+  while (attempt <= policy.maxAttempts) {
     const controller = new AbortController();
-    const timeoutMs = getRequestTimeoutMs();
+    const timeoutMs = getRequestTimeoutMs(policy);
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
@@ -134,7 +178,9 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
         );
       }
 
-      markBackendWarm(path);
+      if (policy.markBackendWarm) {
+        markBackendWarm();
+      }
       return parsed as T;
     } catch (error) {
       const apiError =
@@ -148,7 +194,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
               )
             : new ApiError("network", "Network request failed.", undefined, error);
 
-      const hasMoreAttempts = attempt < MAX_ATTEMPTS;
+      const hasMoreAttempts = attempt < policy.maxAttempts;
       if (hasMoreAttempts && isRetriableError(apiError)) {
         const delayMs = getRetryDelayMs(attempt);
         attempt += 1;
