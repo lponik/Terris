@@ -19,7 +19,7 @@ try:
 except ImportError:  # pragma: no cover - non-Unix fallback
     resource = None  # type: ignore[assignment]
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -431,6 +431,14 @@ def health(request: Request) -> HealthResponse:
         duration_ms,
     )
     return response
+
+
+@app.head("/health", include_in_schema=False)
+def health_head(request: Request) -> Response:
+    loaded = hasattr(request.app.state, "store")
+    ready = _is_app_ready(request)
+    status_code = 200 if loaded and ready else 503
+    return Response(status_code=status_code)
 
 
 @app.get("/stats", response_model=StatsResponse)

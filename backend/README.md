@@ -72,6 +72,8 @@ If using Render free tier, configure an external monitor to prevent idle spin-do
 
 This keeps startup latency low without sending synthetic `/analyze` traffic.
 
+Note: If your monitor tool only supports `HEAD` on a free plan, `HEAD /health` is also supported.
+
 ## Deterministic Report Notes
 `/report` returns a structured explanation based on score breakdown and proximity signals only.
 
