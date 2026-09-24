@@ -10,7 +10,7 @@ from typing import Literal
 from dotenv import load_dotenv
 
 
-EXPECTED_CATEGORIES = ("landfill", "military_base", "industrial_frs", "superfund_npl")
+EXPECTED_CATEGORIES = ("landfill", "military_base", "superfund_npl")
 
 
 def _load_env_files() -> None:
@@ -43,8 +43,6 @@ class Settings:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )
-    report_cache_ttl_seconds: int = 259200
-    report_cache_max_items: int = 2000
 
 
 
@@ -86,8 +84,6 @@ def load_settings() -> Settings:
     cache_size = _get_int("CACHE_SIZE", 5000)
     cache_rounding_decimals = _get_int("CACHE_ROUNDING_DECIMALS", 4)
     environment = _get_environment()
-    report_cache_ttl_seconds = _get_int("REPORT_CACHE_TTL_SECONDS", 259200)
-    report_cache_max_items = _get_int("REPORT_CACHE_MAX_ITEMS", 2000)
 
     if port <= 0:
         raise ValueError(f"PORT must be > 0, got {port}")
@@ -97,11 +93,6 @@ def load_settings() -> Settings:
         raise ValueError(
             f"CACHE_ROUNDING_DECIMALS must be between 0 and 8, got {cache_rounding_decimals}"
         )
-    if report_cache_ttl_seconds <= 0:
-        raise ValueError(f"REPORT_CACHE_TTL_SECONDS must be > 0, got {report_cache_ttl_seconds}")
-    if report_cache_max_items <= 0:
-        raise ValueError(f"REPORT_CACHE_MAX_ITEMS must be > 0, got {report_cache_max_items}")
-
     frontend_origin = os.getenv("FRONTEND_ORIGIN", "").strip() or None
     if environment == "production":
         if not frontend_origin:
@@ -126,6 +117,4 @@ def load_settings() -> Settings:
         environment=environment,
         frontend_origin=frontend_origin,
         cors_allow_origins=cors_allow_origins,
-        report_cache_ttl_seconds=report_cache_ttl_seconds,
-        report_cache_max_items=report_cache_max_items,
     )

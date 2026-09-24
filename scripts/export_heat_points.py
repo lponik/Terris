@@ -14,7 +14,6 @@ INPUT_CSV = REPO_ROOT / "data" / "processed" / "all_sites.csv"
 OUTPUT_DIR = REPO_ROOT / "frontend" / "public" / "heat"
 
 CATEGORY_TO_OUTPUT = {
-    "industrial_frs": "industrial.json",
     "landfill": "landfill.json",
     "military_base": "military.json",
     "superfund_npl": "superfund.json",
@@ -82,14 +81,12 @@ def main() -> int:
             combined_points.append(point)
 
     file_map = {
-        "industrial": "/heat/industrial.json",
         "landfill": "/heat/landfill.json",
         "military": "/heat/military.json",
         "superfund": "/heat/superfund.json",
         "combined": "/heat/combined.json",
     }
 
-    write_json(OUTPUT_DIR / "industrial.json", points_by_category["industrial_frs"])
     write_json(OUTPUT_DIR / "landfill.json", points_by_category["landfill"])
     write_json(OUTPUT_DIR / "military.json", points_by_category["military_base"])
     write_json(OUTPUT_DIR / "superfund.json", points_by_category["superfund_npl"])
@@ -99,7 +96,6 @@ def main() -> int:
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "input_csv": str(INPUT_CSV.relative_to(REPO_ROOT)),
         "counts": {
-            "industrial": len(points_by_category["industrial_frs"]),
             "landfill": len(points_by_category["landfill"]),
             "military": len(points_by_category["military_base"]),
             "superfund": len(points_by_category["superfund_npl"]),

@@ -18,29 +18,9 @@ export default function SignalsTable({ signals }: SignalsTableProps) {
       tone: "military" as const,
     },
     {
-      label: "Nearest industrial site",
-      value: formatMiles(signals?.nearest_industrial_frs_miles),
-      tone: "industrial" as const,
-    },
-    {
       label: "Nearest Superfund NPL",
       value: formatMiles(signals?.nearest_superfund_npl_miles),
       tone: "superfund" as const,
-    },
-    {
-      label: "Industrial count (1 mi)",
-      value: formatCount(signals?.industrial_count_1mi),
-      tone: "industrial" as const,
-    },
-    {
-      label: "Industrial count (3 mi)",
-      value: formatCount(signals?.industrial_count_3mi),
-      tone: "industrial" as const,
-    },
-    {
-      label: "Industrial count (10 mi)",
-      value: formatCount(signals?.industrial_count_10mi),
-      tone: "industrial" as const,
     },
     {
       label: "Superfund count (3 mi)",
@@ -59,11 +39,6 @@ export default function SignalsTable({ signals }: SignalsTableProps) {
       dot: "bg-hazardMilitary",
       label: "text-hazardMilitary",
       value: "text-hazardMilitary",
-    },
-    industrial: {
-      dot: "bg-hazardIndustrial",
-      label: "text-hazardIndustrial",
-      value: "text-hazardIndustrial",
     },
     superfund: {
       dot: "bg-hazardSuperfund",

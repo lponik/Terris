@@ -25,7 +25,6 @@ OUTPUT_COLUMNS = [
     "state",
     "source",
     "metadata_json",
-    "external_id",
 ]
 
 NAME_FIELD_CANDIDATES = [
@@ -326,12 +325,14 @@ def process_superfund_gdb(source_path: Path, output_path: Path) -> dict[str, int
         writer.writeheader()
 
         seen: set[tuple[float, float, str]] = set()
+        seen_site_ids: set[str] = set()
         stats = {
             "input_rows": int(len(gdf)),
             "written_rows": 0,
             "dropped_rows": 0,
             "dropped_invalid_coords": 0,
             "dropped_duplicates": 0,
+            "dropped_outside_coverage": 0,
         }
 
         for row_index, (_, row) in enumerate(gdf.iterrows(), start=1):
@@ -366,8 +367,18 @@ def process_superfund_gdb(source_path: Path, output_path: Path) -> dict[str, int
                 state = clean_state(parse_state_from_address(row.get(address_column)))
             if not state:
                 state = parse_state_from_external_id(raw_external_id)
+            if state not in US_STATE_CODES:
+                stats["dropped_rows"] += 1
+                stats["dropped_outside_coverage"] += 1
+                continue
 
             stable_id = external_id or stable_hash(name, f"{lat:.8f}", f"{lon:.8f}")
+            if stable_id in seen_site_ids:
+                stats["dropped_rows"] += 1
+                stats["dropped_duplicates"] += 1
+                continue
+            seen_site_ids.add(stable_id)
+
             metadata: dict[str, str] = {}
             if selected_layer:
                 metadata["layer"] = selected_layer
@@ -386,7 +397,6 @@ def process_superfund_gdb(source_path: Path, output_path: Path) -> dict[str, int
                     "state": state,
                     "source": "EPA NPL Superfund",
                     "metadata_json": json.dumps(metadata, separators=(",", ":"), ensure_ascii=True),
-                    "external_id": external_id,
                 }
             )
             stats["written_rows"] += 1

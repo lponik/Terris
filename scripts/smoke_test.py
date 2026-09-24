@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Smoke test for end-to-end PFAS distance/risk scoring data bundle."""
+"""Smoke test for the end-to-end Terris screening data bundle."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ ALL_SITES_PATH = REPO_ROOT / "data" / "processed" / "all_sites.csv"
 SUMMARY_PATH = REPO_ROOT / "data" / "processed" / "summary.json"
 RAW_DIR = REPO_ROOT / "data" / "raw"
 
-CATEGORIES = ["industrial_frs", "military_base", "landfill", "superfund_npl"]
+CATEGORIES = ["military_base", "landfill", "superfund_npl"]
 
 
 # Great-circle distance in miles.

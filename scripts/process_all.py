@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build processed PFAS scoring datasets from manually downloaded raw files.
+"""Build Terris screening datasets from manually downloaded raw files.
 
 This script is offline-only and memory-safe for large FRS inputs.
 """
@@ -40,15 +40,7 @@ UNIFIED_COLUMNS = [
     "metadata_json",
 ]
 
-CATEGORY_VALUES = {
-    "industrial_frs",
-    "military_base",
-    "landfill",
-    "superfund_npl",
-}
-
 OUTPUT_FILES = {
-    "industrial_frs": PROCESSED_DIR / "industrial_frs.csv",
     "military_base": PROCESSED_DIR / "military_base.csv",
     "landfill": PROCESSED_DIR / "landfill.csv",
     "superfund_npl": PROCESSED_DIR / "superfund_npl.csv",
@@ -300,11 +292,6 @@ def detect_raw_inputs(raw_dir: Path) -> dict[str, Path | None]:
             extensions=(".csv",),
         )
 
-    frs_program = choose(
-        must_contain_any=["national_program", "program_file"],
-        extensions=(".csv",),
-    )
-
     military = choose(
         must_contain_any=["military", "base", "ntad"],
         extensions=(".csv", ".geojson", ".json"),
@@ -318,8 +305,8 @@ def detect_raw_inputs(raw_dir: Path) -> dict[str, Path | None]:
 
     if frs_facility is None:
         raise FileNotFoundError(
-            "Could not detect FRS facility CSV in data/raw. "
-            "Expected a file like NATIONAL_FACILITY_FILE.CSV."
+            "Could not detect the FRS facility CSV needed to backfill coordinates "
+            "for the coordinate-free military base source."
         )
     if military is None:
         raise FileNotFoundError(
@@ -333,115 +320,9 @@ def detect_raw_inputs(raw_dir: Path) -> dict[str, Path | None]:
 
     return {
         "frs_facility": frs_facility,
-        "frs_program": frs_program,
         "military": military,
         "landfill": landfill,
     }
-
-
-def process_frs(
-    source_path: Path,
-    output_path: Path,
-    progress_every: int,
-) -> dict[str, int]:
-    logging.info("Processing FRS facilities: %s", source_path.name)
-    write_output_header(output_path)
-
-    stats = {
-        "input_rows": 0,
-        "written_rows": 0,
-        "dropped_rows": 0,
-        "dropped_missing_required": 0,
-        "dropped_invalid_coords": 0,
-    }
-
-    with source_path.open("r", encoding="utf-8", errors="replace", newline="") as source_handle:
-        reader = csv.DictReader(source_handle)
-        if not reader.fieldnames:
-            raise ValueError("FRS CSV has no header row.")
-
-        col_registry = pick_column(reader.fieldnames, FRS_COLUMN_CANDIDATES["registry_id"])
-        col_name = pick_column(reader.fieldnames, FRS_COLUMN_CANDIDATES["name"])
-        col_lat = pick_column(reader.fieldnames, FRS_COLUMN_CANDIDATES["lat"])
-        col_lon = pick_column(reader.fieldnames, FRS_COLUMN_CANDIDATES["lon"])
-        col_state = pick_column(reader.fieldnames, FRS_COLUMN_CANDIDATES["state"])
-
-        required_mapping = {
-            "registry_id": col_registry,
-            "name": col_name,
-            "lat": col_lat,
-            "lon": col_lon,
-        }
-        missing = [name for name, column in required_mapping.items() if column is None]
-        if missing:
-            raise ValueError(
-                f"FRS CSV missing required columns: {missing}. "
-                f"Detected fields include: {reader.fieldnames[:20]}..."
-            )
-
-        metadata_columns = {
-            "city": pick_column(reader.fieldnames, ["CITY_NAME", "CITY"]),
-            "county": pick_column(reader.fieldnames, ["COUNTY_NAME", "COUNTY"]),
-            "postal_code": pick_column(reader.fieldnames, ["POSTAL_CODE", "ZIP_CODE", "ZIP"]),
-        }
-
-        with output_path.open("a", encoding="utf-8", newline="") as output_handle:
-            writer = csv.DictWriter(output_handle, fieldnames=UNIFIED_COLUMNS)
-
-            for row in reader:
-                stats["input_rows"] += 1
-                if stats["input_rows"] % progress_every == 0:
-                    logging.info(
-                        "FRS progress rows=%s written=%s dropped=%s",
-                        f"{stats['input_rows']:,}",
-                        f"{stats['written_rows']:,}",
-                        f"{stats['dropped_rows']:,}",
-                    )
-
-                registry_id = clean_id_fragment(row.get(col_registry))
-                facility_name = str(row.get(col_name, "") or "").strip()
-                lat = parse_float(row.get(col_lat))
-                lon = parse_float(row.get(col_lon))
-
-                if not registry_id or not facility_name or lat is None or lon is None:
-                    stats["dropped_rows"] += 1
-                    stats["dropped_missing_required"] += 1
-                    continue
-
-                if not is_valid_coord(lat, lon):
-                    stats["dropped_rows"] += 1
-                    stats["dropped_invalid_coords"] += 1
-                    continue
-
-                metadata: dict[str, str] = {}
-                for key, col_name_opt in metadata_columns.items():
-                    if col_name_opt is None:
-                        continue
-                    value = str(row.get(col_name_opt, "") or "").strip()
-                    if value:
-                        metadata[key] = value
-
-                writer.writerow(
-                    {
-                        "id": f"frs_{registry_id}",
-                        "name": facility_name,
-                        "category": "industrial_frs",
-                        "lat": f"{lat:.8f}",
-                        "lon": f"{lon:.8f}",
-                        "state": clean_state(row.get(col_state)) if col_state else "",
-                        "source": "EPA_FRS_NATIONAL_FACILITY",
-                        "metadata_json": json.dumps(metadata, separators=(",", ":"), ensure_ascii=True),
-                    }
-                )
-                stats["written_rows"] += 1
-
-    logging.info(
-        "FRS done rows=%s written=%s dropped=%s",
-        f"{stats['input_rows']:,}",
-        f"{stats['written_rows']:,}",
-        f"{stats['dropped_rows']:,}",
-    )
-    return stats
 
 
 def geometry_centroid(geometry: dict[str, Any] | None) -> tuple[float | None, float | None]:
@@ -1051,19 +932,13 @@ def prepare_outputs(overwrite: bool) -> None:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Process manual raw datasets into offline PFAS scoring bundle files."
+            "Process manual raw datasets into the offline Terris screening bundle."
         )
     )
     parser.add_argument(
         "--overwrite",
         action="store_true",
         help="Delete and regenerate files in data/processed.",
-    )
-    parser.add_argument(
-        "--frs-progress-every",
-        type=int,
-        default=100_000,
-        help="Log FRS progress every N rows (default: 100000).",
     )
     return parser.parse_args()
 
@@ -1089,11 +964,6 @@ def main() -> int:
             logging.info("  %s: %s", key, value.name if value else "<not found>")
 
         dataset_stats: dict[str, dict[str, int]] = {}
-        dataset_stats["industrial_frs"] = process_frs(
-            source_path=raw_inputs["frs_facility"],
-            output_path=OUTPUT_FILES["industrial_frs"],
-            progress_every=max(args.frs_progress_every, 1),
-        )
 
         military_input = raw_inputs["military"]
         if military_input.suffix.lower() == ".csv":
@@ -1123,7 +993,6 @@ def main() -> int:
             logging.info("Superfund .gdb not found; skipping")
 
         concat_sources = [
-            OUTPUT_FILES["industrial_frs"],
             OUTPUT_FILES["military_base"],
             OUTPUT_FILES["landfill"],
         ]

@@ -27,21 +27,6 @@ type HeatFactory = (
 type LeafletWithHeat = typeof L & { heatLayer?: HeatFactory };
 
 function heatOptionsForMode(mode: HeatMode) {
-  if (mode === "industrial") {
-    return {
-      radius: 22,
-      blur: 16,
-      maxZoom: 12,
-      minOpacity: 0.28,
-      gradient: {
-        0.2: "#ffbe0b",
-        0.5: "#fb5607",
-        0.8: "#e63946",
-        1.0: "#7f1d1d",
-      },
-    };
-  }
-
   if (mode === "landfill") {
     return {
       radius: 21,

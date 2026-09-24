@@ -23,18 +23,13 @@ class Location(BaseModel):
 class Signals(BaseModel):
     nearest_landfill_miles: float | None
     nearest_military_base_miles: float | None
-    nearest_industrial_frs_miles: float | None
     nearest_superfund_npl_miles: float | None = None
-    industrial_count_1mi: int
-    industrial_count_3mi: int
-    industrial_count_10mi: int
     superfund_count_3mi: int = 0
 
 
 class ScoreBreakdown(BaseModel):
     landfill_proximity: float
     military_proximity: float
-    industrial_density: float
     superfund_proximity: float = 0.0
 
 
@@ -59,7 +54,6 @@ class EvidenceItem(BaseModel):
 class Evidence(BaseModel):
     landfill: list[EvidenceItem]
     military_base: list[EvidenceItem]
-    industrial_frs: list[EvidenceItem]
     superfund_npl: list[EvidenceItem] = Field(default_factory=list)
 
 
@@ -80,7 +74,6 @@ class AnalyzeResponse(BaseModel):
 class CategoryCounts(BaseModel):
     landfill: int
     military_base: int
-    industrial_frs: int
     superfund_npl: int = 0
     total: int
 
@@ -104,65 +97,3 @@ class HealthResponse(BaseModel):
     ready: bool | None = None
     uptime_seconds: float | None = None
     startup_total_seconds: float | None = None
-
-
-class ReportRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    lat: float = Field(..., ge=-90, le=90)
-    lon: float = Field(..., ge=-180, le=180)
-
-
-class ReportDriver(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    title: str
-    detail: str
-
-
-class ReportSiteTypeContext(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    site_type: str
-    what_it_can_indicate: str
-
-
-class ReportNextStep(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    action: str
-    why: str
-
-
-class ReportConfidence(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    level: Literal["Low", "Moderate", "High"]
-    rationale: str
-
-
-class ReportMeta(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    ai_used: bool
-    ai_fallback: bool
-    cached: bool
-    cache_key: str
-    model: str | None
-    generated_at: str
-    note: str | None
-
-
-class ReportBody(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    summary: str
-    top_drivers_explained: list[ReportDriver]
-    site_type_context: list[ReportSiteTypeContext]
-    recommended_next_steps: list[ReportNextStep]
-    limitations: list[str]
-    confidence: ReportConfidence
-
-
-class ReportResponse(ReportBody):
-    meta: ReportMeta

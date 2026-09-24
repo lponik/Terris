@@ -34,13 +34,6 @@ const categoryTheme: Record<
     mapButtonHover: "hover:bg-hazardMilitary/20 hover:text-hazardMilitary",
     name: "text-hazardMilitary",
   },
-  industrial_frs: {
-    shell: "border-hazardIndustrial/35 bg-hazardIndustrialSoft/12",
-    card: "border-hazardIndustrial/35 bg-hazardIndustrialSoft/18",
-    mapButton: "border-hazardIndustrial/45 text-hazardIndustrial",
-    mapButtonHover: "hover:bg-hazardIndustrial/20 hover:text-hazardIndustrial",
-    name: "text-hazardIndustrial",
-  },
   superfund_npl: {
     shell: "border-hazardSuperfund/35 bg-hazardSuperfundSoft/12",
     card: "border-hazardSuperfund/35 bg-hazardSuperfundSoft/18",

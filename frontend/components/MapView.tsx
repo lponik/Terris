@@ -31,6 +31,9 @@ interface MapViewProps {
 const US_CENTER: [number, number] = [39.5, -98.35];
 const US_ZOOM = 4;
 const MIN_HEAT_ZOOM = 7;
+const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const BASEMAP_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const US_BOUNDS = L.latLngBounds(
   [24.396308, -125.0],
   [49.384358, -66.93457],
@@ -48,7 +51,6 @@ const selectedPointIcon = L.icon({
 
 const heatModes: Array<{ value: HeatMode; label: string }> = [
   { value: "off", label: "Off" },
-  { value: "industrial", label: "Industrial" },
   { value: "landfill", label: "Landfills" },
   { value: "military", label: "Military" },
   { value: "superfund", label: "Superfund" },
@@ -135,9 +137,6 @@ function formatCoord(value: number | undefined): string {
 function formatEvidenceCategory(value?: string): string {
   if (!value) {
     return "unknown";
-  }
-  if (value === "industrial_frs") {
-    return "Industrial";
   }
   if (value === "military_base") {
     return "Military Base";
@@ -266,10 +265,12 @@ export default function MapView({
         maxBoundsViscosity={1.0}
         className="h-full w-full"
         zoomControl={true}
-        attributionControl={false}
+        attributionControl={true}
       >
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url={BASEMAP_URL}
+          attribution={BASEMAP_ATTRIBUTION}
+          className="basemap-tiles--osm"
           noWrap={true}
         />
         <MapBehavior onSelect={onSelect} focusRequest={focusRequest} onZoomChange={handleZoomChange} />
@@ -303,7 +304,7 @@ export default function MapView({
               {activeHeatLabel}
             </span>
           </div>
-          <div className="mt-2 hidden grid-cols-3 gap-1 group-hover:grid">
+          <div className="mt-2 hidden grid-cols-2 gap-1 group-hover:grid">
             {heatModes.map((mode) => (
               <button
                 key={mode.value}
