@@ -16,11 +16,6 @@ const breakdownTheme = {
     chip: "border-hazardMilitary/45 bg-hazardMilitarySoft/75 text-hazardMilitary",
     track: "bg-hazardMilitary/12",
   },
-  industrial: {
-    bar: "bg-hazardIndustrial",
-    chip: "border-hazardIndustrial/45 bg-hazardIndustrialSoft/75 text-hazardIndustrial",
-    track: "bg-hazardIndustrial/12",
-  },
   superfund: {
     bar: "bg-hazardSuperfund",
     chip: "border-hazardSuperfund/45 bg-hazardSuperfundSoft/75 text-hazardSuperfund",
@@ -65,7 +60,7 @@ function BreakdownRow({
 
 export default function BreakdownBars({ breakdown }: BreakdownBarsProps) {
   const values = getBreakdownValues(breakdown);
-  const maxValue = Math.max(values.landfill, values.military, values.industrial, values.superfund, 1);
+  const maxValue = Math.max(values.landfill, values.military, values.superfund, 1);
 
   return (
     <div className="space-y-3">
@@ -84,14 +79,6 @@ export default function BreakdownBars({ breakdown }: BreakdownBarsProps) {
         barColor={breakdownTheme.military.bar}
         chipColor={breakdownTheme.military.chip}
         trackColor={breakdownTheme.military.track}
-      />
-      <BreakdownRow
-        label="Industrial"
-        value={values.industrial}
-        maxValue={maxValue}
-        barColor={breakdownTheme.industrial.bar}
-        chipColor={breakdownTheme.industrial.chip}
-        trackColor={breakdownTheme.industrial.track}
       />
       <BreakdownRow
         label="Superfund"

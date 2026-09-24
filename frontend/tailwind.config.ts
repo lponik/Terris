@@ -25,8 +25,6 @@ const config: Config = {
         hazardLandfillSoft: "var(--haz-landfill-soft)",
         hazardMilitary: "var(--haz-military)",
         hazardMilitarySoft: "var(--haz-military-soft)",
-        hazardIndustrial: "var(--haz-industrial)",
-        hazardIndustrialSoft: "var(--haz-industrial-soft)",
         hazardSuperfund: "var(--haz-superfund)",
         hazardSuperfundSoft: "var(--haz-superfund-soft)",
       },

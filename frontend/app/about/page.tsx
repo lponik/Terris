@@ -3,41 +3,33 @@ import ScrollReveal from "@/components/ScrollReveal";
 const aboutSections = [
   {
     title: "Data Sources",
-    summary: "Terris aggregates publicly available federal datasets, including:",
+    summary: "Terris combines three public federal datasets:",
     details: [
-      "Landfill site records",
-      "Military base locations",
-      "Industrial facility registry points",
-      "EPA Superfund (NPL) sites",
+      "EPA Superfund National Priorities List site boundaries",
+      "U.S. DOT Bureau of Transportation Statistics military base records",
+      "EPA Landfill Methane Outreach Program landfill records",
     ],
-    caution:
-      "These sources provide location-based records of regulated or historically significant environmental sites.",
+    caution: "Processed records are normalized into one inspectable location dataset.",
   },
   {
     title: "How It Works",
-    summary: "Terris uses a consistent, rules-based approach:",
+    summary: "Choose a point and Terris runs the same fixed calculation every time:",
     details: [
-      "It calculates how close your selected point is to different types of environmental sites.",
-      "It counts how many regulated facilities are within set distance ranges.",
-      "These signals are combined into a 0-10 Environmental Exposure Proxy Score.",
-      "A transparent evidence list shows exactly which nearby records contributed to the result.",
-      "The scoring system is deterministic - meaning the same location always produces the same result, based strictly on the data.",
+      "Measure great-circle distance to the nearest site in each category",
+      "Apply published proximity thresholds to produce a 0–10 screening score",
+      "Show the nearest source records behind the result",
     ],
-    caution: "",
+    caution: "The method is deterministic: the same point and dataset produce the same result.",
   },
   {
-    title: "Limitations and What's Next",
-    summary: "Terris is a screening tool, not a contamination test.",
+    title: "Limitations",
+    summary: "Terris provides context, not a finding of contamination or exposure.",
     details: [
-      "It does not measure water, soil, or air.",
-      "It depends on the completeness and recency of public datasets.",
-      "Proximity and category presence provide context - not proof of exposure.",
-      "Next steps include:",
-      "Improving category filtering and data quality signals",
-      "Adding richer transparency around dataset coverage",
-      "Expanding educational and policy context",
+      "Representative points do not describe a site's full footprint",
+      "Public records may be incomplete, delayed, or imprecise",
+      "Distance does not measure contaminants in air, water, or soil",
     ],
-    caution: "",
+    caution: "Use official site records and local testing for decisions about a specific property.",
   },
 ];
 
@@ -48,19 +40,11 @@ export default function AboutPage() {
         <header className="rounded-2xl border border-border bg-panel/60 p-7 text-center md:p-8">
           <p className="text-sm font-medium text-muted">About Terris</p>
           <h1 className="mt-2 text-4xl font-bold leading-tight text-ink md:text-5xl">
-            Built For Transparent Environmental Awareness
+            Environmental context, made inspectable
           </h1>
-          <p className="mt-4 text-base text-muted md:text-lg">
-            Terris exists to make environmental context easier to understand.
-          </p>
-          <p className="mt-3 text-base text-muted md:text-lg">
-            Environmental data is public - but it's often scattered, technical, and difficult to interpret. Terris
-            brings federal site data into one place and translates it into something simple, consistent, and
-            inspectable.
-          </p>
-          <p className="mt-3 text-base text-muted md:text-lg">
-            The goal is not to diagnose contamination. The goal is to help people explore, ask better questions, and
-            understand what's around them.
+          <p className="mx-auto mt-4 max-w-3xl text-base text-muted md:text-lg">
+            Terris turns three public site datasets into a transparent proximity screening tool. It helps people see
+            what is nearby and inspect the records behind the score.
           </p>
         </header>
 

@@ -34,22 +34,14 @@ from .models import (
     HealthResponse,
     Location,
     Meta,
-    ReportRequest,
-    ReportResponse,
     Score,
     ScoreBreakdown,
     Signals,
     StatsResponse,
 )
-from .report_confidence import compute_confidence
-from .report_fallback import build_fallback_report
-from .report_limits import cache_get, cache_set, get_client_ip
 from .scoring import compute_score
 
 logger = logging.getLogger(__name__)
-
-REPORT_SCORE_VERSION = "v2"
-REPORT_GENERATOR_VERSION = "deterministic_v1"
 
 # FINAL PRODUCTION READINESS CHECKLIST:
 # - Deterministic scoring intact
@@ -89,10 +81,6 @@ class AnalysisCache:
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def _utcnow_iso() -> str:
-    return _utcnow().isoformat()
 
 
 def _process_rss_mb() -> float | None:
@@ -143,22 +131,16 @@ def _validate_coordinates_or_400(lat: float, lon: float) -> None:
 def _build_analyze_response(store: SpatialDataStore, settings: Settings, lat: float, lon: float) -> AnalyzeResponse:
     landfill_raw = store.nearest_k("landfill", lat, lon, k=3, round_distance_miles=False)
     military_raw = store.nearest_k("military_base", lat, lon, k=3, round_distance_miles=False)
-    industrial_raw = store.nearest_k("industrial_frs", lat, lon, k=3, round_distance_miles=False)
     superfund_raw = store.nearest_k("superfund_npl", lat, lon, k=3, round_distance_miles=False)
 
     landfill_evidence = _rounded_evidence(landfill_raw)
     military_evidence = _rounded_evidence(military_raw)
-    industrial_evidence = _rounded_evidence(industrial_raw)
     superfund_evidence = _rounded_evidence(superfund_raw)
 
     signals_payload = {
         "nearest_landfill_miles": landfill_raw[0]["distance_miles"] if landfill_raw else None,
         "nearest_military_base_miles": military_raw[0]["distance_miles"] if military_raw else None,
-        "nearest_industrial_frs_miles": industrial_raw[0]["distance_miles"] if industrial_raw else None,
         "nearest_superfund_npl_miles": superfund_raw[0]["distance_miles"] if superfund_raw else None,
-        "industrial_count_1mi": store.count_within("industrial_frs", lat, lon, radius_miles=1.0),
-        "industrial_count_3mi": store.count_within("industrial_frs", lat, lon, radius_miles=3.0),
-        "industrial_count_10mi": store.count_within("industrial_frs", lat, lon, radius_miles=10.0),
         "superfund_count_3mi": store.count_within("superfund_npl", lat, lon, radius_miles=3.0),
     }
 
@@ -177,14 +159,13 @@ def _build_analyze_response(store: SpatialDataStore, settings: Settings, lat: fl
         evidence=Evidence(
             landfill=landfill_evidence,
             military_base=military_evidence,
-            industrial_frs=industrial_evidence,
             superfund_npl=superfund_evidence,
         ),
         meta=Meta(
             version=settings.version,
             timestamp_utc=_utcnow(),
             notes=[
-                "Deterministic score from landfill proximity, military proximity, industrial density, and superfund proximity signals.",
+                "Deterministic score from landfill, military base, and Superfund proximity signals.",
                 "Distances computed via haversine metric on BallTree and reported in miles.",
             ],
         ),
@@ -255,48 +236,6 @@ def _analyze_with_cache_meta(request: Request, lat: float, lon: float) -> tuple[
     return response, False
 
 
-def _analyze_with_cache(request: Request, lat: float, lon: float) -> AnalyzeResponse:
-    response, _ = _analyze_with_cache_meta(request=request, lat=lat, lon=lon)
-    return response
-
-
-def _build_report_cache_key(lat: float, lon: float) -> str:
-    return f"{lat:.4f},{lon:.4f}|score_{REPORT_SCORE_VERSION}|report_{REPORT_GENERATOR_VERSION}"
-
-
-def _mark_cached_response(report_payload: dict[str, Any], cache_key: str) -> dict[str, Any]:
-    cached_payload = copy.deepcopy(report_payload)
-    meta = cached_payload.get("meta")
-    if not isinstance(meta, dict):
-        meta = {}
-    meta["cached"] = True
-    meta["cache_key"] = cache_key
-    if "generated_at" not in meta or not isinstance(meta.get("generated_at"), str):
-        meta["generated_at"] = _utcnow_iso()
-    cached_payload["meta"] = meta
-    return cached_payload
-
-
-def _log_report_request(
-    *,
-    ip: str,
-    lat: float,
-    lon: float,
-    cache_hit: bool,
-    outcome: str,
-    reason: str | None,
-) -> None:
-    logger.info(
-        "report_request ip=%s lat=%.4f lon=%.4f cache_hit=%s outcome=%s reason=%s",
-        ip,
-        lat,
-        lon,
-        cache_hit,
-        outcome,
-        reason or "-",
-    )
-
-
 settings = load_settings()
 
 
@@ -336,7 +275,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Environmental Exposure Risk API",
-    description="Deterministic spatial risk analysis for landfills, military bases, industrial facilities, and superfund sites.",
+    description="Deterministic spatial screening for landfills, military bases, and Superfund sites.",
     debug=False,
     version=settings.version,
     lifespan=lifespan,
@@ -447,7 +386,7 @@ def stats(request: Request) -> StatsResponse:
     current_settings = _get_settings(request)
 
     counts = store.category_counts
-    total = counts["landfill"] + counts["military_base"] + counts["industrial_frs"] + counts["superfund_npl"]
+    total = counts["landfill"] + counts["military_base"] + counts["superfund_npl"]
 
     return StatsResponse(
         dataset_loaded=True,
@@ -455,7 +394,6 @@ def stats(request: Request) -> StatsResponse:
         category_counts=CategoryCounts(
             landfill=counts["landfill"],
             military_base=counts["military_base"],
-            industrial_frs=counts["industrial_frs"],
             superfund_npl=counts["superfund_npl"],
             total=total,
         ),
@@ -508,62 +446,3 @@ def analyze(request: Request, payload: AnalyzeRequest) -> AnalyzeResponse:
             outcome,
             duration_ms,
         )
-
-
-@app.post("/report", response_model=ReportResponse)
-def report(request: Request, payload: ReportRequest) -> ReportResponse:
-    _validate_coordinates_or_400(payload.lat, payload.lon)
-    current_settings = _get_settings(request)
-    ip = get_client_ip(request)
-    cache_key = _build_report_cache_key(payload.lat, payload.lon)
-
-    cached_payload = cache_get(cache_key, ttl_seconds=current_settings.report_cache_ttl_seconds)
-    if cached_payload is not None:
-        response_payload = _mark_cached_response(cached_payload, cache_key)
-        _log_report_request(
-            ip=ip,
-            lat=payload.lat,
-            lon=payload.lon,
-            cache_hit=True,
-            outcome="success",
-            reason="cache_hit",
-        )
-        return ReportResponse.model_validate(response_payload)
-
-    try:
-        analysis = _analyze_with_cache(request=request, lat=payload.lat, lon=payload.lon)
-        confidence = compute_confidence(analysis)
-        deterministic_payload = build_fallback_report(
-            analysis,
-            confidence,
-            "Deterministic explanation generated from proximity and density screening signals.",
-            cached=False,
-            cache_key=cache_key,
-        )
-        response = ReportResponse.model_validate(deterministic_payload)
-    except HTTPException:
-        raise
-    except Exception:
-        logger.exception(
-            "report_request_failed ip=%s lat=%.6f lon=%.6f",
-            ip,
-            payload.lat,
-            payload.lon,
-        )
-        raise
-
-    cache_set(
-        cache_key,
-        response.model_dump(mode="json"),
-        ttl_seconds=current_settings.report_cache_ttl_seconds,
-        max_items=current_settings.report_cache_max_items,
-    )
-    _log_report_request(
-        ip=ip,
-        lat=payload.lat,
-        lon=payload.lon,
-        cache_hit=False,
-        outcome="success",
-        reason="deterministic_report",
-    )
-    return response

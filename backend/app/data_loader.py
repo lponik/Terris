@@ -184,10 +184,9 @@ def load_spatial_data(data_path: str) -> SpatialDataStore:
 
     logger.info("Built BallTrees in %.2fs", tree_elapsed)
     logger.info(
-        "Category counts | landfill=%s military_base=%s industrial_frs=%s superfund_npl=%s",
+        "Category counts | landfill=%s military_base=%s superfund_npl=%s",
         category_counts["landfill"],
         category_counts["military_base"],
-        category_counts["industrial_frs"],
         category_counts["superfund_npl"],
     )
     logger.info("Startup load+build total %.2fs", startup_elapsed)

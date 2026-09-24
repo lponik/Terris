@@ -64,9 +64,6 @@ export default function ScoreBadge({ score, band, isLoading = false }: ScoreBadg
         <span className="rounded-full border border-hazardMilitary/45 bg-hazardMilitarySoft/70 px-2 py-0.5 text-hazardMilitary">
           Military
         </span>
-        <span className="rounded-full border border-hazardIndustrial/45 bg-hazardIndustrialSoft/70 px-2 py-0.5 text-hazardIndustrial">
-          Industrial
-        </span>
         <span className="rounded-full border border-hazardSuperfund/45 bg-hazardSuperfundSoft/70 px-2 py-0.5 text-hazardSuperfund">
           Superfund
         </span>

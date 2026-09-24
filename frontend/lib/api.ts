@@ -1,19 +1,14 @@
 import type {
   AnalyzeResponse,
-  GenerateReportPayload,
   HealthResponse,
-  ReportResponse,
 } from "./types";
 
 const DEFAULT_BASE_URL = "http://localhost:8000";
 const HEALTH_TIMEOUT_MS = 10_000;
 const COLD_ANALYZE_TIMEOUT_MS = 30_000;
 const WARM_ANALYZE_TIMEOUT_MS = 15_000;
-const COLD_REPORT_TIMEOUT_MS = 30_000;
-const WARM_REPORT_TIMEOUT_MS = 15_000;
 const HEALTH_MAX_ATTEMPTS = 1;
 const ANALYZE_MAX_ATTEMPTS = 2;
-const REPORT_MAX_ATTEMPTS = 2;
 const RETRY_DELAY_BASE_MS = 600;
 const RETRY_DELAY_JITTER_MS = 300;
 const RETRIABLE_HTTP_STATUS_CODES = new Set([502, 503, 504]);
@@ -75,14 +70,6 @@ function getRequestPolicy(path: string): RequestPolicy {
       warmTimeoutMs: WARM_ANALYZE_TIMEOUT_MS,
       maxAttempts: ANALYZE_MAX_ATTEMPTS,
       markBackendWarm: true,
-    };
-  }
-  if (path === "/report") {
-    return {
-      coldTimeoutMs: COLD_REPORT_TIMEOUT_MS,
-      warmTimeoutMs: WARM_REPORT_TIMEOUT_MS,
-      maxAttempts: REPORT_MAX_ATTEMPTS,
-      markBackendWarm: false,
     };
   }
   return {
@@ -240,13 +227,6 @@ export function analyzePoint(lat: number, lon: number): Promise<AnalyzeResponse>
   return requestJson<AnalyzeResponse>("/analyze", {
     method: "POST",
     body: JSON.stringify({ lat, lon }),
-  });
-}
-
-export function generateReport(payload: GenerateReportPayload): Promise<ReportResponse> {
-  return requestJson<ReportResponse>("/report", {
-    method: "POST",
-    body: JSON.stringify(payload),
   });
 }
 

@@ -7,7 +7,6 @@ import Sidebar from "@/components/Sidebar";
 import {
   ApiError,
   analyzePoint,
-  generateReport,
   getErrorMessage,
   health,
   isBackendWarmSession,
@@ -22,7 +21,6 @@ import type {
   HeatPoint,
   LatLon,
   MapFocusRequest,
-  ReportResponse,
 } from "@/lib/types";
 import type { GeocodeResult } from "@/lib/geocode";
 
@@ -185,19 +183,13 @@ function mapEvidenceToActive(
 export default function HomePage() {
   const [selectedPoint, setSelectedPoint] = useState<LatLon | null>(null);
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
-  const [report, setReport] = useState<ReportResponse | null>(null);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [reportError, setReportError] = useState<string | null>(null);
   const [analysisErrorKind, setAnalysisErrorKind] = useState<string | null>(null);
-  const [reportErrorKind, setReportErrorKind] = useState<string | null>(null);
   const [isBackendWarming, setIsBackendWarming] = useState<boolean>(() => !isBackendWarmSession());
   const [backendWarmupWarning, setBackendWarmupWarning] = useState<string | null>(null);
-
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -213,7 +205,6 @@ export default function HomePage() {
   const [isHeatLoading, setIsHeatLoading] = useState(false);
   const [heatError, setHeatError] = useState<string | null>(null);
   const [activeEvidence, setActiveEvidence] = useState<ActiveEvidence | null>(null);
-  const [isReportFocusMode, setIsReportFocusMode] = useState(false);
 
   const analyzeRunId = useRef(0);
   const searchRunId = useRef(0);
@@ -232,7 +223,6 @@ export default function HomePage() {
       }
 
       setAnalysis(response);
-      setLastUpdated(response.meta?.timestamp_utc ?? new Date().toISOString());
       setIsBackendWarming(false);
       setBackendWarmupWarning(null);
     } catch (error) {
@@ -259,11 +249,6 @@ export default function HomePage() {
       setAnalysis(null);
       setAnalysisError(null);
       setAnalysisErrorKind(null);
-      setLastUpdated(null);
-      setReport(null);
-      setReportError(null);
-      setReportErrorKind(null);
-      setIsReportFocusMode(false);
       setActiveEvidence(null);
     },
     [],
@@ -286,31 +271,6 @@ export default function HomePage() {
     }
     void runAnalysis(point);
   }, [mapZoomLevel, runAnalysis, selectedPoint]);
-
-  const handleGenerateReport = useCallback(async () => {
-    const point = selectedPoint ?? analysis?.location ?? null;
-    if (!point) {
-      return;
-    }
-
-    setIsGeneratingReport(true);
-    setReportError(null);
-    setReportErrorKind(null);
-
-    try {
-      const response = await generateReport({
-        lat: point.lat,
-        lon: point.lon,
-      });
-      setReport(response);
-    } catch (error) {
-      setReportError(formatErrorWithClass(error));
-      setReportErrorKind(error instanceof ApiError ? error.kind : "unknown");
-      logApiTelemetry("report_error", error);
-    } finally {
-      setIsGeneratingReport(false);
-    }
-  }, [analysis, selectedPoint]);
 
   useEffect(() => {
     let active = true;
@@ -553,13 +513,9 @@ export default function HomePage() {
 
   return (
     <main className="w-full p-3 md:p-4 lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden">
-      <div
-        className={`report-layout mx-auto grid max-w-[1750px] grid-cols-1 gap-4 lg:h-[min(760px,calc(100vh-6.5rem))] ${
-          isReportFocusMode ? "report-layout--focus" : ""
-        }`}
-      >
+      <div className="analysis-layout mx-auto grid max-w-[1750px] grid-cols-1 gap-4 lg:h-[min(760px,calc(100vh-6.5rem))]">
         <section
-          className="report-map-shell animate-revealUp flex min-h-0 flex-col gap-3 lg:col-span-1"
+          className="animate-revealUp flex min-h-0 flex-col gap-3 lg:col-span-1"
         >
           {isBackendWarming ? (
             <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-sm text-muted">
@@ -576,18 +532,13 @@ export default function HomePage() {
               Analyze error class: {analysisErrorKind}
             </div>
           ) : null}
-          {reportErrorKind ? (
-            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-xs text-muted">
-              Report error class: {reportErrorKind}
-            </div>
-          ) : null}
           <div className="relative min-h-0 flex-1">
             <DynamicMap
               selectedPoint={selectedPoint}
               onSelect={handleMapSelect}
               onZoomLevelChange={handleMapZoomLevelChange}
               onAnalyzeClick={handleAnalyzeAgain}
-              canAnalyze={Boolean(selectedPoint) && !isAnalyzing && !isGeneratingReport}
+              canAnalyze={Boolean(selectedPoint) && !isAnalyzing}
               isLoading={isAnalyzing}
               heatEnabled={heatMode !== "off"}
               heatMode={heatMode}
@@ -672,20 +623,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="report-sidebar-shell animate-revealUp stagger-1 min-h-0 lg:col-span-1">
+        <section className="animate-revealUp stagger-1 min-h-0 lg:col-span-1">
           <Sidebar
-            selectedPoint={selectedPoint}
             analysis={analysis}
-            report={report}
             analysisError={analysisError}
-            reportError={reportError}
             isAnalyzing={isAnalyzing}
-            isGeneratingReport={isGeneratingReport}
-            onGenerateReport={handleGenerateReport}
-            isReportFocusMode={isReportFocusMode}
-            onToggleReportFocusMode={() => setIsReportFocusMode((current) => !current)}
-            lastUpdated={lastUpdated}
-            isCached={Boolean(analysis?.meta?.cached)}
             onEvidenceSelect={handleEvidenceSelect}
           />
         </section>
