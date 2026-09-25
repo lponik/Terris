@@ -25,7 +25,7 @@ The map uses OpenStreetMap directly in local development and production. No map 
 - `GET /stats`
 - `POST /analyze` with `{ "lat": number, "lon": number }`
 
-The UI displays the score, category breakdown, proximity signals, nearest evidence records, and heat layers for landfills, military bases, and Superfund sites.
+The UI displays the nearest mapped environmental site, nearest Superfund site and landfill, a sorted list within 5 miles, and heat layers for the two datasets. Heat layers remain available at national zoom with reduced radius and opacity. The API retains 1/5/10-mile counts, but the sidebar omits the count table.
 
 ## Checks
 

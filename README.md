@@ -1,12 +1,11 @@
 # Terris
 
-Terris is a deterministic environmental-site screening map. Select a U.S. location to compare its proximity to three public record categories:
+Terris is a deterministic environmental-proximity map. Select a U.S. location to compare its distance to two public environmental-site categories:
 
-- EPA Superfund National Priorities List sites
-- U.S. military bases
+- EPA Superfund sites, including retained legacy records, NPL records, and SAA sites
 - EPA Landfill Methane Outreach Program landfills
 
-Terris is a screening tool. It does not measure contaminants, exposure, or health risk and should not replace official records or local testing.
+Distances represent proximity to mapped environmental sites. They do not estimate contaminants, personal exposure, or health risk and should not replace official records or local testing.
 
 ## Live app
 
@@ -14,26 +13,27 @@ https://terris-theta.vercel.app/
 
 ## How it works
 
-1. Offline scripts normalize the three source datasets into the shared schema below.
-2. FastAPI loads `data/processed/all_sites.csv` once and builds one haversine `BallTree` per category.
-3. `POST /analyze` finds nearby records and applies fixed proximity thresholds.
-4. The Next.js app displays the score, signals, evidence, and static heat layers.
+1. One offline builder validates the versioned landfill, legacy Superfund, NPL, and filtered SAA snapshots, merges Superfund records by EPA ID, and generates the shared runtime bundle.
+2. FastAPI loads `data/processed/all_sites.csv` once and prepares one set of NumPy coordinate arrays per category.
+3. `POST /analyze` performs one vectorized Haversine scan per category and reuses each distance array for nearest-site selection and radius counts.
+4. The Next.js app displays direct proximity results and static heat layers, including a reduced-density national overview.
 
 ```text
 id,name,category,lat,lon,state,source,metadata_json
 ```
 
-The supported category values are `landfill`, `military_base`, and `superfund_npl`.
+The supported category values are `landfill` and `superfund`.
 
-## Scoring v3
+## Proximity results
 
-The category contributions add to a maximum score of 10:
+`POST /analyze` returns:
 
-- Landfill proximity, up to 3 points: `<1`, `<3`, and `<10` miles.
-- Military-base proximity, up to 3 points: `<1`, `<5`, and `<15` miles.
-- Superfund proximity, up to 4 points: `<1`, `<3`, `<10`, and `<25` miles.
+- the nearest mapped environmental site overall;
+- the nearest Superfund site and nearest landfill;
+- category counts within 1, 5, and 10 miles;
+- up to 20 sites within 5 miles, sorted by distance.
 
-Bands are Low (`<=3.3`), Moderate (`<=6.6`), and High (`>6.6`). The same coordinate and dataset always produce the same score.
+Superfund points are representative mapped locations. NPL coordinates come from the EPA NPL dataset, retained legacy-only points may be boundary-derived, and some SAA-only points are address-geocoded. These points do not represent contamination boundaries or exact contamination locations.
 
 ## API
 
@@ -41,32 +41,37 @@ Bands are Low (`<=3.3`), Moderate (`<=6.6`), and High (`>6.6`). The same coordin
 |---|---|---|
 | `GET` | `/health` | Liveness and readiness |
 | `GET` | `/stats` | Dataset counts and startup metrics |
-| `POST` | `/analyze` | Score and evidence for `{ "lat": number, "lon": number }` |
+| `POST` | `/analyze` | Proximity results for `{ "lat": number, "lon": number }` |
 
 ## Data workflow
 
-Raw downloads stay local under `data/raw/`. Processed artifacts are versioned under `data/processed/`.
+Terris uses a snapshot-first pipeline. The cleaned, versioned inputs live under `data/snapshots/`; raw downloads under `data/raw/` are local research material and are not part of the active build.
 
 ```bash
-python scripts/process_all.py --overwrite
-python scripts/clean_processed_data.py
-python scripts/validate.py
-python scripts/export_heat_points.py
+python scripts/build_data.py
+python scripts/validate_data.py
 python scripts/smoke_test.py
+python -m unittest discover -s tests -v
 ```
 
-`clean_processed_data.py` enforces the shared schema, required fields, valid coordinates and coverage, unique site IDs, and deterministic ordering. It also collapses duplicate Superfund boundary records into one representative site point.
+`build_data.py` validates and normalizes the canonical snapshots, merges legacy, NPL, and SAA records by EPA ID, then regenerates `all_sites.csv`, three heat payloads, and one checksum manifest. Coordinate precedence is new NPL, retained legacy, then SAA. Outputs are staged before promotion, and a failed promotion rolls back files already replaced. The build is deterministic: unchanged snapshots produce byte-identical outputs and the same dataset version.
 
-The retained processed files are:
+`validate_data.py` is read-only. It applies the same snapshot checks and requires every generated artifact to match the expected bytes and checksums.
+
+The active data layout is:
 
 ```text
-data/processed/landfill.csv
-data/processed/military_base.csv
-data/processed/superfund_npl.csv
+data/snapshots/landfill.csv
+data/snapshots/superfund_legacy.csv
+data/snapshots/superfund_npl.csv
+data/snapshots/superfund_saa.csv
+data/snapshots/sources.json
 data/processed/all_sites.csv
-data/processed/process_stats.json
-data/processed/summary.json
+data/processed/manifest.json
+frontend/public/heat/{landfill,superfund,combined}.json
 ```
+
+Edit or replace snapshots only as an intentional dataset refresh. Update `sources.json` with provenance and cleaning counts, run the builder, review the manifest and diff, then run validation and tests. The retired raw-ingestion scripts are not required to run or deploy the application.
 
 ## Local development
 

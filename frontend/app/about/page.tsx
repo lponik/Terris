@@ -1,84 +1,126 @@
 import ScrollReveal from "@/components/ScrollReveal";
 
-const aboutSections = [
-  {
-    title: "Data Sources",
-    summary: "Terris combines three public federal datasets:",
-    details: [
-      "EPA Superfund National Priorities List site boundaries",
-      "U.S. DOT Bureau of Transportation Statistics military base records",
-      "EPA Landfill Methane Outreach Program landfill records",
-    ],
-    caution: "Processed records are normalized into one inspectable location dataset.",
-  },
-  {
-    title: "How It Works",
-    summary: "Choose a point and Terris runs the same fixed calculation every time:",
-    details: [
-      "Measure great-circle distance to the nearest site in each category",
-      "Apply published proximity thresholds to produce a 0–10 screening score",
-      "Show the nearest source records behind the result",
-    ],
-    caution: "The method is deterministic: the same point and dataset produce the same result.",
-  },
-  {
-    title: "Limitations",
-    summary: "Terris provides context, not a finding of contamination or exposure.",
-    details: [
-      "Representative points do not describe a site's full footprint",
-      "Public records may be incomplete, delayed, or imprecise",
-      "Distance does not measure contaminants in air, water, or soil",
-    ],
-    caution: "Use official site records and local testing for decisions about a specific property.",
-  },
-];
+const GITHUB_URL = "https://github.com/lponik/Terris";
 
 export default function AboutPage() {
   return (
     <main className="w-full px-4 py-8 md:px-5 md:py-10">
-      <div className="mx-auto max-w-[1100px] space-y-5">
-        <header className="rounded-2xl border border-border bg-panel/60 p-7 text-center md:p-8">
-          <p className="text-sm font-medium text-muted">About Terris</p>
-          <h1 className="mt-2 text-4xl font-bold leading-tight text-ink md:text-5xl">
-            Environmental context, made inspectable
-          </h1>
-          <p className="mx-auto mt-4 max-w-3xl text-base text-muted md:text-lg">
-            Terris turns three public site datasets into a transparent proximity screening tool. It helps people see
-            what is nearby and inspect the records behind the score.
-          </p>
-        </header>
+      <div className="mx-auto max-w-[1080px] space-y-5">
+        <ScrollReveal>
+          <header className="rounded-2xl border border-border bg-panel/60 p-7 md:p-10">
+            <h1 className="max-w-3xl text-4xl font-bold leading-tight text-ink md:text-5xl">
+              What is Terris?
+            </h1>
+            <div className="mt-5 max-w-4xl space-y-4 text-base leading-relaxed text-muted md:text-lg">
+              <p>
+                Terris is an environmental proximity map built to make public environmental data easier to explore.
+              </p>
+              <p>
+                Information about Superfund sites and landfills are publicly available, but who wants to search through large government datasets and use unfamiliar tools.
+              </p>
+              <p>
+                Terris brings that information into one place. 
+              </p>
+            </div>
+          </header>
+        </ScrollReveal>
 
-        <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-          {aboutSections.map((section, index) => (
-            <ScrollReveal key={section.title} className="h-full" delayMs={index * 70}>
-              <article
-                tabIndex={0}
-                className="group flex h-full flex-col rounded-2xl border border-border bg-panel/58 p-5 text-left transform-gpu will-change-transform transition-[transform,box-shadow,border-color,background-color] duration-[520ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:z-10 hover:-translate-y-1.5 hover:scale-[1.035] hover:border-accent/45 hover:bg-panel/74 hover:shadow-[0_0_0_1px_rgba(15,111,67,0.32),0_24px_56px_rgba(7,19,12,0.36)] focus:outline-none focus-visible:z-10 focus-visible:-translate-y-1.5 focus-visible:scale-[1.035] focus-visible:border-accent/45 focus-visible:bg-panel/74 focus-visible:shadow-[0_0_0_1px_rgba(15,111,67,0.32),0_24px_56px_rgba(7,19,12,0.36)] motion-reduce:transform-none motion-reduce:transition-none md:min-h-[320px] md:p-6"
-              >
-                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted/95">{`0${index + 1}`}</p>
-                <h2 className="mt-2 text-2xl font-semibold leading-tight text-ink">{section.title}</h2>
-                <p className="mt-3 text-base leading-relaxed text-muted md:text-lg">{section.summary}</p>
+        <ScrollReveal delayMs={70}>
+          <section
+            className="rounded-2xl border border-border bg-panel/58 p-6 md:p-8"
+            aria-labelledby="site-types"
+          >
+            <h2 id="site-types" className="px-1 text-2xl font-semibold text-ink md:text-3xl">
+              What are these sites?
+            </h2>
 
-                <ul className="mt-4 space-y-2.5">
-                  {section.details.map((detail) => (
-                    <li
-                      key={detail}
-                      className="rounded-lg bg-panelSoft/56 px-3 py-2 text-base leading-relaxed text-ink/95 md:text-[1.03rem]"
-                    >
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
-
-                {section.caution ? (
-                  <p className="mt-4 rounded-lg border border-border bg-panel/70 px-3 py-2 text-base leading-relaxed text-muted md:text-[1.03rem]">
-                    {section.caution}
+            <div className="mt-5 grid overflow-hidden rounded-xl border border-border bg-panelSoft/35 md:grid-cols-2 md:divide-x md:divide-border">
+              <article className="flex h-full flex-col p-5 md:p-6">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-hazardSuperfund">Superfund</p>
+                <h3 className="mt-2 text-2xl font-semibold text-ink">Superfund Sites</h3>
+                <div className="mt-3 flex-1 space-y-3 text-base leading-relaxed text-muted">
+                  <p>
+                    Superfund is an EPA program for sites where hazardous substances have been released, or could
+                    potentially be released, into the environment.
                   </p>
-                ) : null}
+                  <p>
+                    Terris includes sites from the National Priorities List, along with additional mapped EPA Superfund
+                    records and selected Superfund Alternative Approach locations with usable coordinates.
+                  </p>
+                </div>
+                <p className="mt-6 font-mono text-2xl font-bold tabular-nums text-ink">1,924 mapped locations</p>
               </article>
-            </ScrollReveal>
-          ))}
-        </section>
+
+              <article className="flex h-full flex-col border-t border-border p-5 md:border-t-0 md:p-6">
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-hazardLandfill">Landfill</p>
+                <h3 className="mt-2 text-2xl font-semibold text-ink">Landfills</h3>
+                <div className="mt-3 flex-1 space-y-3 text-base leading-relaxed text-muted">
+                  <p>Landfills are places where waste is disposed of and managed.</p>
+                  <p>
+                    Terris maps landfill locations from the EPA&apos;s Landfill Methane Outreach Program, which tracks
+                    landfills and landfill-gas information across the United States.
+                  </p>
+                </div>
+                <p className="mt-6 font-mono text-2xl font-bold tabular-nums text-ink">2,323 mapped locations</p>
+              </article>
+            </div>
+          </section>
+        </ScrollReveal>
+
+        <ScrollReveal delayMs={190}>
+          <section className="rounded-2xl border border-border bg-panel/58 p-6 md:p-8" aria-labelledby="data">
+            <h2 id="data" className="text-2xl font-semibold text-ink md:text-3xl">Data</h2>
+            <div className="mt-4 max-w-4xl space-y-3 text-base leading-relaxed text-muted md:text-lg">
+              <p>
+                Terris currently contains <strong className="text-ink">4,247 mapped locations</strong> from publicly
+                available U.S. Environmental Protection Agency data.
+              </p>
+              <p>
+                The source datasets are cleaned, standardized, and combined into a consistent format before being used
+                by the map.
+              </p>
+            </div>
+          </section>
+        </ScrollReveal>
+
+        <ScrollReveal delayMs={230}>
+          <section className="rounded-2xl border border-border bg-panel/58 p-6 md:p-8" aria-labelledby="limitations">
+            <h2 id="limitations" className="text-2xl font-semibold text-ink md:text-3xl">Limitations</h2>
+            <p className="mt-4 text-lg font-bold text-warning">Terris measures proximity, not risk.</p>
+            <div className="mt-3 max-w-4xl space-y-3 text-base leading-relaxed text-muted md:text-lg">
+              <p>
+                Being close to a mapped site does not necessarily mean you are exposed to contamination or that an area
+                is unsafe.
+              </p>
+              <p>
+                Terris does not estimate contaminant levels, personal exposure, health effects, or property safety. Site
+                markers are based on coordinates from the underlying datasets and may not represent the exact location
+                or full extent of contamination.
+              </p>
+              <p>
+                For environmental or health decisions, refer to the original EPA records and appropriate professionals.
+              </p>
+            </div>
+          </section>
+        </ScrollReveal>
+
+        <ScrollReveal delayMs={270}>
+          <section className="rounded-2xl border border-border bg-panel/58 p-6 md:p-8" aria-labelledby="open-source">
+            <h2 id="open-source" className="text-2xl font-semibold text-ink md:text-3xl">Open Source</h2>
+            <p className="mt-4 max-w-4xl text-base leading-relaxed text-muted md:text-lg">
+              Terris is an open-source project. The source code, data pipeline, methodology, and development history are
+              available on GitHub.
+            </p>
+            <a
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-5 inline-flex rounded-lg border border-accent bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            >
+              View Terris on GitHub ↗
+            </a>
+          </section>
+        </ScrollReveal>
       </div>
     </main>
   );

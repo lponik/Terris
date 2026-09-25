@@ -11,16 +11,20 @@ import {
   health,
   isBackendWarmSession,
 } from "@/lib/api";
-import { getGeocodeErrorMessage, inferSearchZoom, searchUsLocations } from "@/lib/geocode";
+import {
+  getGeocodeErrorMessage,
+  inferSearchZoom,
+  reverseGeocodeUsState,
+  searchUsLocations,
+} from "@/lib/geocode";
 import type {
   ActiveEvidence,
   AnalyzeResponse,
-  EvidenceCategory,
-  EvidenceItem,
   HeatMode,
   HeatPoint,
   LatLon,
   MapFocusRequest,
+  ProximitySite,
 } from "@/lib/types";
 import type { GeocodeResult } from "@/lib/geocode";
 
@@ -105,89 +109,15 @@ function downsampleHeatPoints(points: HeatPoint[], maxPoints: number): HeatPoint
   return points.filter((_, index) => index % step === 0);
 }
 
-function parseNumber(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
-  }
-  return null;
-}
-
-function mapEvidenceToActive(
-  item: EvidenceItem,
-  category: EvidenceCategory,
-  index: number,
-): ActiveEvidence | null {
-  const record = item as Record<string, unknown>;
-
-  const lat =
-    parseNumber(record.lat) ??
-    parseNumber(record.latitude) ??
-    parseNumber(record.lat_deg);
-  const lon =
-    parseNumber(record.lon) ??
-    parseNumber(record.longitude) ??
-    parseNumber(record.lng) ??
-    parseNumber(record.lon_deg);
-
-  if (lat == null || lon == null) {
-    return null;
-  }
-
-  const id =
-    (typeof record.id === "string" && record.id) ||
-    `${category}-${index}-${lat.toFixed(4)}-${lon.toFixed(4)}`;
-
-  const name =
-    (typeof record.name === "string" && record.name) ||
-    (typeof record.site_name === "string" && record.site_name) ||
-    (typeof record.facility_name === "string" && record.facility_name) ||
-    (typeof record.title === "string" && record.title) ||
-    undefined;
-
-  const distance_miles =
-    parseNumber(record.distance_miles) ??
-    parseNumber(record.distance) ??
-    parseNumber(record.distanceMi) ??
-    undefined;
-
-  const source =
-    (typeof record.source === "string" && record.source) ||
-    (typeof record.program === "string" && record.program) ||
-    (typeof record.dataset === "string" && record.dataset) ||
-    undefined;
-
-  const state =
-    (typeof record.state === "string" && record.state) ||
-    (typeof record.state_code === "string" && record.state_code) ||
-    (typeof record.st === "string" && record.st) ||
-    undefined;
-
-  return {
-    id,
-    lat,
-    lon,
-    name,
-    distance_miles,
-    source,
-    state,
-    category,
-  };
-}
-
 export default function HomePage() {
   const [selectedPoint, setSelectedPoint] = useState<LatLon | null>(null);
+  const [selectedLocationLabel, setSelectedLocationLabel] = useState<string | null>(null);
+  const [selectedStateCode, setSelectedStateCode] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalyzeResponse | null>(null);
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [analysisErrorKind, setAnalysisErrorKind] = useState<string | null>(null);
   const [isBackendWarming, setIsBackendWarming] = useState<boolean>(() => !isBackendWarmSession());
   const [backendWarmupWarning, setBackendWarmupWarning] = useState<string | null>(null);
 
@@ -200,7 +130,7 @@ export default function HomePage() {
   const [mapFocusRequest, setMapFocusRequest] = useState<MapFocusRequest | null>(null);
   const [mapZoomLevel, setMapZoomLevel] = useState(4);
 
-  const [heatMode, setHeatMode] = useState<HeatMode>("off");
+  const [heatMode, setHeatMode] = useState<HeatMode>("combined");
   const [heatPoints, setHeatPoints] = useState<HeatPoint[]>([]);
   const [isHeatLoading, setIsHeatLoading] = useState(false);
   const [heatError, setHeatError] = useState<string | null>(null);
@@ -214,7 +144,6 @@ export default function HomePage() {
     const runId = ++analyzeRunId.current;
     setIsAnalyzing(true);
     setAnalysisError(null);
-    setAnalysisErrorKind(null);
 
     try {
       const response = await analyzePoint(point.lat, point.lon);
@@ -230,7 +159,6 @@ export default function HomePage() {
         return;
       }
       setAnalysisError(formatErrorWithClass(error));
-      setAnalysisErrorKind(error instanceof ApiError ? error.kind : "unknown");
       logApiTelemetry("analyze_error", error);
     } finally {
       if (runId === analyzeRunId.current) {
@@ -246,13 +174,40 @@ export default function HomePage() {
       setIsAnalyzing(false);
       setMapFocusRequest(null);
       setSelectedPoint(point);
+      setSelectedLocationLabel(null);
+      setSelectedStateCode(null);
       setAnalysis(null);
       setAnalysisError(null);
-      setAnalysisErrorKind(null);
       setActiveEvidence(null);
     },
     [],
   );
+
+  useEffect(() => {
+    if (!selectedPoint || selectedStateCode) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timerId = window.setTimeout(() => {
+      void reverseGeocodeUsState(
+        selectedPoint.lat,
+        selectedPoint.lon,
+        controller.signal,
+      ).then((stateCode) => {
+        if (!controller.signal.aborted) {
+          setSelectedStateCode(stateCode);
+        }
+      }).catch(() => {
+        // State context is helpful but should not block point selection.
+      });
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timerId);
+      controller.abort();
+    };
+  }, [selectedPoint, selectedStateCode]);
 
   const handleAnalyzeAgain = useCallback(() => {
     const point = selectedPoint;
@@ -319,6 +274,8 @@ export default function HomePage() {
       setActiveEvidence(null);
 
       handleMapSelect(point);
+      setSelectedLocationLabel(result.displayName);
+      setSelectedStateCode(result.stateCode ?? null);
 
       setMapFocusRequest({
         id: Date.now(),
@@ -375,17 +332,9 @@ export default function HomePage() {
     }
   }, [handleSearchSelect, searchQuery, searchResults]);
 
-  const handleEvidenceSelect = useCallback(
-    (category: EvidenceCategory, item: EvidenceItem, index: number) => {
-      const mapped = mapEvidenceToActive(item, category, index);
-      if (!mapped) {
-        return;
-      }
-      setActiveEvidence(mapped);
-      setSelectedPoint({ lat: mapped.lat, lon: mapped.lon });
-    },
-    [],
-  );
+  const handleSiteSelect = useCallback((item: ProximitySite) => {
+    setActiveEvidence(item);
+  }, []);
 
   useEffect(() => {
     const query = searchQuery.trim();
@@ -462,7 +411,7 @@ export default function HomePage() {
         const response = await fetch(`/heat/${mode}.json`, {
           method: "GET",
           signal: controller.signal,
-          cache: "force-cache",
+          cache: "no-store",
         });
 
         if (!response.ok) {
@@ -489,7 +438,7 @@ export default function HomePage() {
         }
 
         setHeatPoints([]);
-        setHeatError("Heat layer unavailable. Run python scripts/export_heat_points.py.");
+        setHeatError("Heat layer unavailable. Run python scripts/build_data.py.");
       } finally {
         if (active && !controller.signal.aborted) {
           setIsHeatLoading(false);
@@ -511,9 +460,16 @@ export default function HomePage() {
     setMapZoomLevel((current) => (current === zoom ? current : zoom));
   }, []);
 
+  const nearestSites: ActiveEvidence[] = analysis
+    ? [
+        analysis.nearest_by_category.superfund,
+        analysis.nearest_by_category.landfill,
+      ].filter((site): site is ProximitySite => site !== null)
+    : [];
+
   return (
-    <main className="w-full p-3 md:p-4 lg:h-[calc(100vh-3.5rem)] lg:overflow-hidden">
-      <div className="analysis-layout mx-auto grid max-w-[1750px] grid-cols-1 gap-4 lg:h-[min(760px,calc(100vh-6.5rem))]">
+    <main className="w-full p-3 md:p-4 lg:h-[calc(100vh-5rem)] lg:overflow-hidden">
+      <div className="analysis-layout mx-auto grid max-w-[1750px] grid-cols-1 gap-4 lg:h-[min(760px,calc(100vh-7rem))]">
         <section
           className="animate-revealUp flex min-h-0 flex-col gap-3 lg:col-span-1"
         >
@@ -525,11 +481,6 @@ export default function HomePage() {
           {backendWarmupWarning ? (
             <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-sm text-muted">
               {backendWarmupWarning}
-            </div>
-          ) : null}
-          {analysisErrorKind ? (
-            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-xs text-muted">
-              Analyze error class: {analysisErrorKind}
             </div>
           ) : null}
           <div className="relative min-h-0 flex-1">
@@ -548,6 +499,7 @@ export default function HomePage() {
               heatPoints={heatPoints}
               focusRequest={mapFocusRequest}
               activeEvidence={activeEvidence}
+              nearestSites={nearestSites}
               onEvidencePopupClose={() => setActiveEvidence(null)}
             />
 
@@ -628,7 +580,10 @@ export default function HomePage() {
             analysis={analysis}
             analysisError={analysisError}
             isAnalyzing={isAnalyzing}
-            onEvidenceSelect={handleEvidenceSelect}
+            selectedPoint={selectedPoint}
+            selectedLocationLabel={selectedLocationLabel}
+            selectedStateCode={selectedStateCode}
+            onSiteSelect={handleSiteSelect}
           />
         </section>
       </div>

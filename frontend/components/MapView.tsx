@@ -1,6 +1,6 @@
 "use client";
 
-import { MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
 import markerIcon from "leaflet/dist/images/marker-icon.png";
@@ -8,6 +8,7 @@ import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import HeatLayer from "@/components/HeatLayer";
+import { distanceTone, formatSiteSource } from "@/lib/format";
 import type { ActiveEvidence, HeatMode, HeatPoint, LatLon, MapFocusRequest } from "@/lib/types";
 
 interface MapViewProps {
@@ -25,15 +26,13 @@ interface MapViewProps {
   heatError?: string | null;
   focusRequest?: MapFocusRequest | null;
   activeEvidence?: ActiveEvidence | null;
+  nearestSites?: ActiveEvidence[];
   onEvidencePopupClose?: () => void;
 }
 
 const US_CENTER: [number, number] = [39.5, -98.35];
 const US_ZOOM = 4;
-const MIN_HEAT_ZOOM = 7;
 const BASEMAP_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
-const BASEMAP_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const US_BOUNDS = L.latLngBounds(
   [24.396308, -125.0],
   [49.384358, -66.93457],
@@ -52,7 +51,6 @@ const selectedPointIcon = L.icon({
 const heatModes: Array<{ value: HeatMode; label: string }> = [
   { value: "off", label: "Off" },
   { value: "landfill", label: "Landfills" },
-  { value: "military", label: "Military" },
   { value: "superfund", label: "Superfund" },
   { value: "combined", label: "Combined" },
 ];
@@ -127,27 +125,33 @@ function formatEvidenceDistance(value?: number): string {
   return `${value.toFixed(2)} mi`;
 }
 
-function formatCoord(value: number | undefined): string {
-  if (typeof value !== "number" || Number.isNaN(value)) {
-    return "----";
-  }
-  return value.toFixed(4);
-}
-
 function formatEvidenceCategory(value?: string): string {
   if (!value) {
     return "unknown";
   }
-  if (value === "military_base") {
-    return "Military Base";
-  }
   if (value === "landfill") {
     return "Landfill";
   }
-  if (value === "superfund_npl") {
-    return "Superfund NPL";
+  if (value === "superfund") {
+    return "Superfund";
   }
   return value;
+}
+
+function evidenceColor(category?: string): string {
+  return category === "superfund" ? "#b4c95e" : "#3bcf9f";
+}
+
+function SitePopupContent({ site }: { site: ActiveEvidence }) {
+  return (
+    <div className="space-y-1 text-sm">
+      <p className={`font-semibold ${distanceTone(site.distance_miles)}`}>{site.name}</p>
+      <p className="text-muted">Category: {formatEvidenceCategory(site.category)}</p>
+      <p className={distanceTone(site.distance_miles)}>Distance: {formatEvidenceDistance(site.distance_miles)}</p>
+      <p className="text-muted">Source: {formatSiteSource(site.source)}</p>
+      <p className="text-muted">State: {site.state}</p>
+    </div>
+  );
 }
 
 function EvidencePopupMarker({
@@ -161,17 +165,15 @@ function EvidencePopupMarker({
   const markerRef = useRef<L.Marker | null>(null);
 
   useEffect(() => {
-    map.flyTo([activeEvidence.lat, activeEvidence.lon], 12, {
-      animate: true,
-      duration: 0.6,
+    map.stop();
+    map.setView([activeEvidence.lat, activeEvidence.lon], 12, { animate: false });
+
+    const frame = window.requestAnimationFrame(() => {
+      markerRef.current?.openPopup();
     });
 
-    const timer = window.setTimeout(() => {
-      markerRef.current?.openPopup();
-    }, 120);
-
     return () => {
-      window.clearTimeout(timer);
+      window.cancelAnimationFrame(frame);
     };
   }, [activeEvidence, map]);
 
@@ -187,13 +189,7 @@ function EvidencePopupMarker({
       }}
     >
       <Popup>
-        <div className="space-y-1 text-sm">
-          <p className="font-semibold text-ink">{activeEvidence.name ?? "Evidence site"}</p>
-          <p className="text-muted">Category: {formatEvidenceCategory(activeEvidence.category)}</p>
-          <p className="text-muted">Distance: {formatEvidenceDistance(activeEvidence.distance_miles)}</p>
-          <p className="text-muted">Source: {activeEvidence.source ?? "unknown"}</p>
-          <p className="text-muted">State: {activeEvidence.state ?? "unknown"}</p>
-        </div>
+        <SitePopupContent site={activeEvidence} />
       </Popup>
     </Marker>
   );
@@ -214,13 +210,12 @@ export default function MapView({
   heatError = null,
   focusRequest = null,
   activeEvidence = null,
+  nearestSites = [],
   onEvidencePopupClose,
 }: MapViewProps) {
   const [zoomLevel, setZoomLevel] = useState(US_ZOOM);
-  const [userHeatOverride, setUserHeatOverride] = useState(false);
   const activeHeatLabel = heatModes.find((mode) => mode.value === heatMode)?.label ?? "Off";
-  const isHeatZoomReady = zoomLevel >= MIN_HEAT_ZOOM;
-  const showHeatLayer = heatEnabled && heatMode !== "off" && isHeatZoomReady;
+  const showHeatLayer = heatEnabled && heatMode !== "off";
 
   const handleZoomChange = useCallback((zoom: number) => {
     onZoomLevelChange?.(zoom);
@@ -229,30 +224,12 @@ export default function MapView({
 
   const handleHeatModeSelect = useCallback(
     (mode: HeatMode) => {
-      setUserHeatOverride(true);
       if (mode !== heatMode) {
         onHeatModeChange?.(mode);
       }
     },
     [heatMode, onHeatModeChange],
   );
-
-  useEffect(() => {
-    if (!onHeatModeChange) {
-      return;
-    }
-
-    if (zoomLevel < MIN_HEAT_ZOOM) {
-      if (heatMode !== "off") {
-        onHeatModeChange("off");
-      }
-      return;
-    }
-
-    if (!userHeatOverride && heatMode === "off") {
-      onHeatModeChange("combined");
-    }
-  }, [heatMode, onHeatModeChange, userHeatOverride, zoomLevel]);
 
   return (
     <div className="relative h-full min-h-[360px] overflow-hidden rounded-3xl border border-border bg-panel shadow-panel">
@@ -265,16 +242,30 @@ export default function MapView({
         maxBoundsViscosity={1.0}
         className="h-full w-full"
         zoomControl={true}
-        attributionControl={true}
+        attributionControl={false}
       >
         <TileLayer
           url={BASEMAP_URL}
-          attribution={BASEMAP_ATTRIBUTION}
           className="basemap-tiles--osm"
           noWrap={true}
         />
         <MapBehavior onSelect={onSelect} focusRequest={focusRequest} onZoomChange={handleZoomChange} />
-        {showHeatLayer ? <HeatLayer enabled={true} points={heatPoints} mode={heatMode} /> : null}
+        {showHeatLayer ? <HeatLayer enabled={true} points={heatPoints} mode={heatMode} zoomLevel={zoomLevel} /> : null}
+        {nearestSites.map((site) => {
+          const color = evidenceColor(site.category);
+          return (
+            <CircleMarker
+              key={`nearest-${site.category}-${site.id}`}
+              center={[site.lat, site.lon]}
+              radius={7}
+              pathOptions={{ color, fillColor: color, fillOpacity: 0.78, weight: 2 }}
+            >
+              <Popup>
+                <SitePopupContent site={site} />
+              </Popup>
+            </CircleMarker>
+          );
+        })}
         {activeEvidence ? (
           <EvidencePopupMarker
             activeEvidence={activeEvidence}
@@ -284,16 +275,17 @@ export default function MapView({
         {selectedPoint ? <Marker position={[selectedPoint.lat, selectedPoint.lon]} icon={selectedPointIcon} /> : null}
       </MapContainer>
 
+      <a
+        href="https://www.openstreetmap.org/copyright"
+        target="_blank"
+        rel="noreferrer"
+        className="absolute bottom-3 left-3 z-[650] rounded bg-panel/70 px-1.5 py-0.1 text-[7px] text-muted/80 backdrop-blur-sm transition hover:text-ink"
+      >
+        © OpenStreetMap contributors
+      </a>
+
       <div className="pointer-events-none absolute left-4 top-24 rounded-xl border border-border bg-panel/55 px-3 py-2 text-xs font-medium text-muted backdrop-blur-sm">
         Click anywhere in the U.S. to select a point.
-      </div>
-
-      <div className="pointer-events-none absolute bottom-4 left-4 z-[650]">
-        <div className="w-[200px] rounded-xl border border-border bg-panel/55 p-2 backdrop-blur-sm">
-          <p className="text-sm font-medium text-ink">Selected coordinates</p>
-          <p className="mt-1 text-sm font-semibold text-ink">Lat: {formatCoord(selectedPoint?.lat)}</p>
-          <p className="text-sm font-semibold text-ink">Lon: {formatCoord(selectedPoint?.lon)}</p>
-        </div>
       </div>
 
       <div className="pointer-events-none absolute bottom-4 right-4 z-[650]">
@@ -310,8 +302,7 @@ export default function MapView({
                 key={mode.value}
                 type="button"
                 onClick={() => handleHeatModeSelect(mode.value)}
-                disabled={!isHeatZoomReady}
-                className={`rounded-md border px-1.5 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-55 ${
+                className={`rounded-md border px-1.5 py-1 text-xs font-semibold transition ${
                   heatMode === mode.value
                     ? "border-accent bg-accent text-white"
                     : "border-border bg-panelSoft text-ink hover:bg-panelSoft/70"
@@ -321,8 +312,8 @@ export default function MapView({
               </button>
             ))}
           </div>
-          {!isHeatZoomReady ? (
-            <p className="mt-2 text-xs text-muted">Zoom in to enable heat layer (zoom ≥ 7).</p>
+          {zoomLevel <= 6 && heatMode !== "off" ? (
+            <p className="mt-2 hidden text-xs text-muted group-hover:block">National overview density</p>
           ) : null}
           {isHeatLoading ? (
             <p className="mt-2 hidden text-xs text-muted group-hover:block">Loading heat layer...</p>
@@ -340,7 +331,7 @@ export default function MapView({
           disabled={!canAnalyze || isLoading}
           className="pointer-events-auto inline-flex min-w-[180px] items-center justify-center rounded-md border border-border bg-panel/55 px-7 py-3 text-sm font-semibold text-ink backdrop-blur-sm transition hover:bg-panel/70 disabled:cursor-not-allowed disabled:opacity-55"
         >
-          {isLoading ? "Analyzing..." : "Analyze"}
+          {isLoading ? "Calculating distances..." : "Analyze proximity"}
         </button>
       </div>
 
@@ -348,7 +339,7 @@ export default function MapView({
         <div className="pointer-events-none absolute inset-x-0 bottom-12 flex items-center justify-center bg-gradient-to-t from-panel/80 via-panel/55 to-transparent py-4">
           <div className="flex items-center gap-2 rounded-full border border-border bg-panel px-4 py-1.5 text-sm text-ink shadow-sm">
             <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-            Running analysis...
+            Measuring mapped-site distances...
           </div>
         </div>
       ) : null}
