@@ -1,58 +1,35 @@
-# Terris Frontend (MVP)
+# Terris Frontend
 
-Next.js 14 + TypeScript + Tailwind + Leaflet frontend for Terris, a national environmental exposure proxy map.
-
-## Prerequisites
-
-- Node.js 18+
-- Backend running locally (FastAPI) at `http://localhost:8000` by default
+Next.js 14, TypeScript, Tailwind, and Leaflet frontend for Terris.
 
 ## Setup
-
-1. Install dependencies:
 
 ```bash
 cd frontend
 npm install
-```
-
-2. Configure API base URL:
-
-```bash
 cp .env.example .env.local
-```
-
-Set `NEXT_PUBLIC_API_BASE_URL` if your backend is not on `http://localhost:8000`.
-
-3. Start dev server:
-
-```bash
 npm run dev
 ```
 
-Open `http://localhost:3000` and use the Map route.
+Open `http://localhost:3000`.
 
-## Backend Requirement
+## Environment
 
-This frontend expects these endpoints:
+- `NEXT_PUBLIC_API_BASE_URL`: FastAPI origin; defaults to `http://localhost:8000`.
+
+The map uses OpenStreetMap directly in local development and production. No map API key is required.
+
+## Backend contract
 
 - `GET /health`
-- `GET /stats` (optional in UI)
+- `GET /stats`
 - `POST /analyze` with `{ "lat": number, "lon": number }`
-- `POST /report` (wired as optional report action)
 
-## Example Flow
+The UI displays the nearest mapped environmental site, nearest Superfund site and landfill, a sorted list within 5 miles, and heat layers for the two datasets. Heat layers remain available at national zoom with reduced radius and opacity. The API retains 1/5/10-mile counts, but the sidebar omits the count table.
 
-1. Click any location on the map.
-2. Click **Analyze** on the map.
-3. Sidebar shows score, band, breakdown, signals, and top evidence.
-4. Click **Generate Report** to call `POST /report` and render returned JSON.
+## Checks
 
-## Notes
-
-- Map defaults to continental U.S. center (`39.5, -98.35`, zoom `4`).
-- Analyze/report requests use a cold-start-aware timeout policy:
-  - cold session: up to 75 seconds
-  - warm session: 20 seconds
-  - up to 3 total attempts with exponential backoff for timeout/network/502/503/504 failures
-- UI shows loading states, error states, backend health, and last-updated timestamp.
+```bash
+npm run typecheck
+npm run build
+```

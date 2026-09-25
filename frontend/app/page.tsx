@@ -12,7 +12,7 @@ export default function HomePage() {
           Terris
         </h1>
         <p className="terris-subtitle mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-muted sm:text-base md:text-lg">      
-          Explore proximity to superfund sites, landfills, military bases, and regulated facilities in the US.
+          Explore proximity to mapped Superfund sites and landfills in the U.S.
         </p>
         <Link
           href="/map"

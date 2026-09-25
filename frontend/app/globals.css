@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  --font-sans: var(--font-open-sans), "Segoe UI", "Helvetica Neue", sans-serif;
   --canvas: #030905;
   --panel: #09140e;
   --panel-soft: #0f1f17;
@@ -10,17 +11,11 @@
   --muted: #87a391;
   --accent: #0f6f43;
   --accent-soft: #123224;
-  --low: #2e965f;
-  --moderate: #f4b443;
-  --high: #f2726f;
   --border: #1d372b;
   --danger: #ff7a7a;
+  --warning: #f4cf57;
   --haz-landfill: #3bcf9f;
   --haz-landfill-soft: #123d31;
-  --haz-military: #ffba49;
-  --haz-military-soft: #3f2c0f;
-  --haz-industrial: #ff5d5d;
-  --haz-industrial-soft: #451b1b;
   --haz-superfund: #b4c95e;
   --haz-superfund-soft: #2e3a16;
 }
@@ -43,7 +38,7 @@ html {
 }
 
 body {
-  font-family: "Manrope", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: var(--font-sans);
   color: var(--ink);
   background-color: #020503;
   background:
@@ -74,14 +69,8 @@ a {
   background: #020503;
 }
 
-.leaflet-control-attribution {
-  font-size: 10px;
-  background-color: rgba(10, 20, 15, 0.84) !important;
-  color: var(--muted) !important;
-}
-
-.leaflet-control-attribution a {
-  color: var(--ink) !important;
+.basemap-tiles--osm {
+  filter: invert(1) hue-rotate(180deg) brightness(0.68) contrast(1.28) saturate(0.5);
 }
 
 .leaflet-bar,
@@ -199,7 +188,7 @@ a {
 }
 
 .terris-wordmark {
-  font-family: "Manrope", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .terris-logo {
@@ -252,86 +241,13 @@ a {
   animation-delay: 220ms;
 }
 
-.report-layout {
-  transition:
-    grid-template-columns 460ms cubic-bezier(0.22, 0.8, 0.2, 1),
-    gap 300ms ease;
-}
-
 @media (min-width: 1024px) {
-  .report-layout {
+  .analysis-layout {
     grid-template-columns: minmax(0, 2.2fr) minmax(360px, 1fr);
   }
-
-  .report-layout.report-layout--focus {
-    grid-template-columns: minmax(260px, 0.9fr) minmax(520px, 1.5fr);
-  }
 }
 
-.report-map-shell {
-  transition:
-    transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 320ms ease,
-    filter 320ms ease;
-}
-
-.report-sidebar-shell {
-  transition:
-    transform 420ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    opacity 320ms ease;
-}
-
-@media (min-width: 1024px) {
-  .report-layout--focus .report-map-shell {
-    transform: translateX(-10px) scale(0.986);
-    opacity: 0.72;
-    filter: saturate(0.82);
-  }
-
-  .report-layout--focus .report-sidebar-shell {
-    transform: translateX(2px) scale(1.01);
-  }
-}
-
-.report-content > * {
-  animation: reportFadeIn 280ms ease both;
-}
-
-.report-content > *:nth-child(2) {
-  animation-delay: 40ms;
-}
-
-.report-content > *:nth-child(3) {
-  animation-delay: 80ms;
-}
-
-.report-content > *:nth-child(4) {
-  animation-delay: 120ms;
-}
-
-.report-content > *:nth-child(5) {
-  animation-delay: 160ms;
-}
-
-.report-content > *:nth-child(6) {
-  animation-delay: 190ms;
-}
-
-.report-card {
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    box-shadow 200ms ease,
-    background-color 200ms ease;
-}
-
-.report-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(135, 163, 145, 0.45);
-  box-shadow: 0 10px 24px rgba(2, 8, 5, 0.34);
-}
-
-.report-card-hover {
+.interactive-card {
   transition:
     transform 170ms ease,
     box-shadow 190ms ease,
@@ -339,7 +255,7 @@ a {
     background-color 190ms ease;
 }
 
-.report-card-hover:hover {
+.interactive-card:hover {
   transform: translateY(-2px) scale(1.008);
   border-color: rgba(135, 163, 145, 0.42);
   box-shadow: 0 8px 18px rgba(2, 8, 5, 0.28);
@@ -374,17 +290,6 @@ a {
     opacity: 1;
     transform: translateY(0) scale(1);
     filter: saturate(1);
-  }
-}
-
-@keyframes reportFadeIn {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -453,18 +358,13 @@ a {
   .terris-cta,
   .terris-subtitle,
   .terris-hero,
-  .report-content > *,
   .analysis-enter,
   .scroll-reveal,
   .scroll-reveal--visible {
     animation: none !important;
   }
 
-  .report-layout,
-  .report-map-shell,
-  .report-sidebar-shell,
-  .report-card,
-  .report-card-hover,
+  .interactive-card,
   .scroll-reveal {
     transition: none !important;
   }

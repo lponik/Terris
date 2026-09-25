@@ -1,211 +1,81 @@
+# Terris
 
-## Live Link
+Terris is a deterministic environmental-proximity map. Select a U.S. location to compare its distance to two public environmental-site categories:
 
-- https://terris-theta.vercel.app/
+- EPA Superfund sites, including retained legacy records, NPL records, and SAA sites
+- EPA Landfill Methane Outreach Program landfills
 
----
+Distances represent proximity to mapped environmental sites. They do not estimate contaminants, personal exposure, or health risk and should not replace official records or local testing.
 
-## 1) Mission
+## Live app
 
-Terris exists to make environmental context inspectable.
+https://terris-theta.vercel.app/
 
-- Combine scattered federal site datasets into one normalized geospatial index.
-- Provide consistent proximity and density signals with explicit scoring logic.
-- Surface evidence and drivers so users can verify what influenced each result.
+## How it works
 
-Terris is a screening tool. It does not measure contaminants, diagnose exposure, or replace official records and local testing.
-
----
-
-## 2) Features
-
-- Deterministic scoring (`v2`) with no AI dependency in `/analyze`.
-- Transparent breakdown by source signal:
-  `landfill_proximity`, `military_proximity`, `industrial_density`, `superfund_proximity`.
-- Evidence lists per category (nearest records with distances).
-- Deterministic `/report` endpoint with structured rationale and cached responses.
-- Fast startup indexing with `BallTree` (haversine) and no per-request CSV reads.
-- Frontend map workflow with click-to-analyze, geocoding, and heat layers.
-
----
-
-## 3) How It Works
-
-1. **Data preparation** (`scripts/`) normalizes raw datasets into:
-   - `data/processed/landfill.csv`
-   - `data/processed/military_base.csv`
-   - `data/processed/industrial_frs.csv`
-   - `data/processed/superfund_npl.csv`
-   - `data/processed/all_sites.csv`
-   - Industrial rows are derived from the FRS National Facility file.
-2. **Backend startup** loads `all_sites.csv` once and builds category-specific spatial indices.
-3. **`POST /analyze`** computes nearest distances and density counts around a point.
-4. **Score engine** applies fixed thresholds and clamps total to `0-10`.
-5. **Frontend** renders score, band, drivers, and evidence for inspection.
-
-<details>
-<summary><strong>Data + startup guarantees</strong></summary>
-
-- Dataset is loaded once at app startup.
-- BallTrees are built once per category.
-- No per-request CSV reads.
-- Output is deterministic for the same input coordinates and dataset.
-
-Reference:
-- [`backend/app/data_loader.py`](backend/app/data_loader.py)
-- [`backend/app/main.py`](backend/app/main.py)
-
-</details>
-
----
-
-## 4) Scoring System
-
-### Band Mapping
-
-- `Low`: `0.00 - 3.30`
-- `Moderate`: `3.31 - 6.60`
-- `High`: `6.61 - 10.00`
-
-<details>
-<summary><strong>Inspectable thresholds (scoring v2)</strong></summary>
-
-### Landfill Proximity (`0-3`)
-- `< 1.0 mi` → `+3.0`
-- `< 3.0 mi` → `+2.0`
-- `< 10.0 mi` → `+1.0`
-
-### Military Proximity (`0-3`)
-- `< 1.0 mi` → `+3.0`
-- `< 5.0 mi` → `+2.0`
-- `< 15.0 mi` → `+1.0`
-
-### Industrial Density + Proximity (capped at `6.0`)
-- Within `1 mi`:
-  - `>= 25` sites → `+2.0`
-  - `>= 10` sites → `+1.5`
-  - `>= 1` site → `+1.0`
-- Within `3 mi`:
-  - `>= 200` sites → `+2.0`
-  - `>= 75` sites → `+1.5`
-  - `>= 10` sites → `+1.0`
-- Within `10 mi`:
-  - `>= 1500` sites → `+1.5`
-  - `>= 600` sites → `+1.0`
-  - `>= 200` sites → `+0.5`
-- Nearest industrial proximity:
-  - `< 0.5 mi` → `+1.0`
-  - `< 1.5 mi` → `+0.5`
-
-### Superfund (NPL) Proximity (`0-4`)
-- `< 1.0 mi` → `+4.0`
-- `< 3.0 mi` → `+3.0`
-- `< 10.0 mi` → `+2.0`
-- `< 25.0 mi` → `+1.0`
-
-Implementation source:
-- [`backend/app/scoring.py`](backend/app/scoring.py)
-
-</details>
-
----
-
-## 5) Architecture Overview
-
-```mermaid
-flowchart LR
-  A["Raw Source Files<br/>data/raw"] --> B["Pipeline Scripts<br/>scripts/"]
-  B --> C["Processed Dataset<br/>data/processed/all_sites.csv"]
-  C --> D["FastAPI Backend<br/>startup load + BallTree index"]
-  D --> E["Analyze + Report Endpoints<br/>deterministic responses"]
-  E --> F["Next.js Frontend<br/>map, score, evidence, report UI"]
-```
-
-### Runtime Components
-
-- **Frontend (`frontend/`)**
-  - Next.js 14 + TypeScript + Tailwind + Leaflet
-  - Map interaction, geocoding, heat overlays, response rendering
-- **Backend (`backend/`)**
-  - FastAPI + Pydantic + pandas + scikit-learn BallTree
-  - Deterministic scoring + report generation
-- **Data Pipeline (`scripts/`)**
-  - Normalization and export to processed CSV artifacts
-
-<details>
-<summary><strong>Repository layout</strong></summary>
+1. One offline builder validates the versioned landfill, legacy Superfund, NPL, and filtered SAA snapshots, merges Superfund records by EPA ID, and generates the shared runtime bundle.
+2. FastAPI loads `data/processed/all_sites.csv` once and prepares one set of NumPy coordinate arrays per category.
+3. `POST /analyze` performs one vectorized Haversine scan per category and reuses each distance array for nearest-site selection and radius counts.
+4. The Next.js app displays direct proximity results and static heat layers, including a reduced-density national overview.
 
 ```text
-.
-├── backend/
-│   └── app/
-├── frontend/
-│   ├── app/
-│   ├── components/
-│   └── lib/
-├── data/
-│   ├── raw/
-│   └── processed/
-├── scripts/
-└── README.md
+id,name,category,lat,lon,state,source,metadata_json
 ```
 
-</details>
+The supported category values are `landfill` and `superfund`.
 
----
+## Proximity results
 
-## 6) API Overview
+`POST /analyze` returns:
 
-Base URL (local): `http://localhost:8000`
+- the nearest mapped environmental site overall;
+- the nearest Superfund site and nearest landfill;
+- category counts within 1, 5, and 10 miles;
+- up to 20 sites within 5 miles, sorted by distance.
+
+Superfund points are representative mapped locations. NPL coordinates come from the EPA NPL dataset, retained legacy-only points may be boundary-derived, and some SAA-only points are address-geocoded. These points do not represent contamination boundaries or exact contamination locations.
+
+## API
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Liveness + dataset/version status |
-| `GET` | `/stats` | Dataset counts + startup/load metrics |
-| `POST` | `/analyze` | Deterministic scoring + evidence for `{ lat, lon }` |
-| `POST` | `/report` | Deterministic structured explanation for `{ lat, lon }` |
+| `GET` | `/health` | Liveness and readiness |
+| `GET` | `/stats` | Dataset counts and startup metrics |
+| `POST` | `/analyze` | Proximity results for `{ "lat": number, "lon": number }` |
 
-### Key Request Model
+## Data workflow
 
-```json
-{
-  "lat": 40.7128,
-  "lon": -74.0060
-}
-```
-
-### Key Response Fields (`/analyze`)
-
-- `signals`: nearest distances + density counts
-- `score.total`: clamped `0-10`
-- `score.breakdown`: category points
-- `score.band`: `Low | Moderate | High`
-- `score.top_drivers`: ranked text drivers
-- `evidence`: nearest records by category
-
-<details>
-<summary><strong>cURL quick checks</strong></summary>
+Terris uses a snapshot-first pipeline. The cleaned, versioned inputs live under `data/snapshots/`; raw downloads under `data/raw/` are local research material and are not part of the active build.
 
 ```bash
-curl -s http://localhost:8000/health
-curl -s http://localhost:8000/stats
-curl -s -X POST http://localhost:8000/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"lat":40.7128,"lon":-74.0060}'
+python scripts/build_data.py
+python scripts/validate_data.py
+python scripts/smoke_test.py
+python -m unittest discover -s tests -v
 ```
 
-</details>
+`build_data.py` validates and normalizes the canonical snapshots, merges legacy, NPL, and SAA records by EPA ID, then regenerates `all_sites.csv`, three heat payloads, and one checksum manifest. Coordinate precedence is new NPL, retained legacy, then SAA. Outputs are staged before promotion, and a failed promotion rolls back files already replaced. The build is deterministic: unchanged snapshots produce byte-identical outputs and the same dataset version.
 
----
+`validate_data.py` is read-only. It applies the same snapshot checks and requires every generated artifact to match the expected bytes and checksums.
 
-## 7) Local Development
+The active data layout is:
 
-### Prerequisites
+```text
+data/snapshots/landfill.csv
+data/snapshots/superfund_legacy.csv
+data/snapshots/superfund_npl.csv
+data/snapshots/superfund_saa.csv
+data/snapshots/sources.json
+data/processed/all_sites.csv
+data/processed/manifest.json
+frontend/public/heat/{landfill,superfund,combined}.json
+```
 
-- Python 3
-- Node.js 18+
+Edit or replace snapshots only as an intentional dataset refresh. Update `sources.json` with provenance and cleaning counts, run the builder, review the manifest and diff, then run validation and tests. The retired raw-ingestion scripts are not required to run or deploy the application.
 
-### Backend
+## Local development
+
+Backend:
 
 ```bash
 python3 -m venv .venv
@@ -214,7 +84,7 @@ pip install -r backend/requirements.txt
 python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Frontend
+Frontend:
 
 ```bash
 cd frontend
@@ -223,14 +93,4 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Set `frontend/.env.local`:
-
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-```
-
-### Optional smoke test
-
-```bash
-python scripts/smoke_test.py
-```
+`NEXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:8000`. The map uses OpenStreetMap directly and does not require a map API key.

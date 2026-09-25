@@ -1,5 +1,6 @@
 const NOMINATIM_SEARCH_URL = "https://nominatim.openstreetmap.org/search";
-const SEARCH_USER_AGENT = "henhacks2026-risk-map/1.0 (contact: demo@local)";
+const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
+const SEARCH_USER_AGENT = "terris-proximity-map/1.0 (contact: demo@local)";
 
 interface NominatimSearchResponseRow {
   place_id: number;
@@ -8,6 +9,7 @@ interface NominatimSearchResponseRow {
   lon: string;
   class?: string;
   type?: string;
+  address?: Record<string, string | undefined>;
 }
 
 export interface GeocodeResult {
@@ -17,6 +19,22 @@ export interface GeocodeResult {
   lon: number;
   className?: string;
   type?: string;
+  stateCode?: string;
+}
+
+interface NominatimReverseResponse {
+  address?: Record<string, string | undefined>;
+}
+
+function stateCodeFromAddress(address?: Record<string, string | undefined>): string | undefined {
+  const direct = address?.state_code?.trim().toUpperCase();
+  if (direct && /^[A-Z]{2}$/.test(direct)) {
+    return direct;
+  }
+
+  const isoCode = address?.["ISO3166-2-lvl4"]?.trim().toUpperCase();
+  const suffix = isoCode?.match(/^US-([A-Z]{2})$/)?.[1];
+  return suffix;
 }
 
 export class GeocodeError extends Error {
@@ -106,10 +124,38 @@ export async function searchUsLocations(
       lon,
       className: item.class,
       type: item.type,
+      stateCode: stateCodeFromAddress(item.address),
     });
   }
 
   return results;
+}
+
+export async function reverseGeocodeUsState(
+  lat: number,
+  lon: number,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const params = new URLSearchParams({
+    lat: String(lat),
+    lon: String(lon),
+    format: "json",
+    addressdetails: "1",
+    zoom: "5",
+  });
+  const response = await fetch(`${NOMINATIM_REVERSE_URL}?${params.toString()}`, {
+    method: "GET",
+    signal,
+    cache: "no-store",
+    headers: { "Accept-Language": "en" },
+    referrer: typeof window !== "undefined" ? window.location.origin : undefined,
+    referrerPolicy: "strict-origin-when-cross-origin",
+  });
+  if (!response.ok) {
+    return null;
+  }
+  const payload = (await response.json()) as NominatimReverseResponse;
+  return stateCodeFromAddress(payload.address) ?? null;
 }
 
 export function getGeocodeErrorMessage(error: unknown): string {

@@ -1,7 +1,6 @@
-export type RiskBand = "Low" | "Moderate" | "High";
-export type HeatMode = "off" | "industrial" | "landfill" | "military" | "superfund" | "combined";
+export type HeatMode = "off" | "landfill" | "superfund" | "combined";
 export type HeatPoint = [number, number] | [number, number, number];
-export type EvidenceCategory = "landfill" | "military_base" | "industrial_frs" | "superfund_npl";
+export type SiteCategory = "landfill" | "superfund";
 
 export interface LatLon {
   lat: number;
@@ -12,74 +11,47 @@ export interface Location extends LatLon {
   label?: string;
 }
 
-export interface Signals {
-  nearest_landfill_miles?: number | null;
-  nearest_military_base_miles?: number | null;
-  nearest_industrial_frs_miles?: number | null;
-  nearest_superfund_npl_miles?: number | null;
-  industrial_count_1mi?: number;
-  industrial_count_3mi?: number;
-  industrial_count_10mi?: number;
-  superfund_count_3mi?: number;
-}
-
-export interface ScoreBreakdown {
-  landfill?: number;
-  military?: number;
-  industrial?: number;
-  landfill_proximity?: number;
-  military_proximity?: number;
-  industrial_density?: number;
-  superfund_proximity?: number;
-}
-
-export interface Score {
-  total: number;
-  band: RiskBand;
-  breakdown: ScoreBreakdown;
-  top_drivers?: string[];
-}
-
-export interface EvidenceItem {
-  id?: string | null;
-  name?: string | null;
-  distance_miles?: number | null;
-  lat?: number | null;
-  lon?: number | null;
-  state?: string | null;
-  source?: string | null;
-}
-
-export interface Evidence {
-  landfill: EvidenceItem[];
-  military_base: EvidenceItem[];
-  industrial_frs: EvidenceItem[];
-  superfund_npl?: EvidenceItem[];
-}
-
-export interface ActiveEvidence {
+export interface ProximitySite {
   id: string;
+  name: string;
+  category: SiteCategory;
+  distance_miles: number;
   lat: number;
   lon: number;
-  name?: string;
-  distance_miles?: number;
-  source?: string;
-  state?: string;
-  category?: EvidenceCategory;
+  state: string;
+  source: string;
+}
+
+export interface NearestByCategory {
+  landfill: ProximitySite | null;
+  superfund: ProximitySite | null;
+}
+
+export interface RadiusCounts {
+  within_1_mile: number;
+  within_5_miles: number;
+  within_10_miles: number;
+}
+
+export interface CountsWithinMiles {
+  landfill: RadiusCounts;
+  superfund: RadiusCounts;
 }
 
 export interface Meta {
-  version?: string;
-  timestamp_utc?: string;
-  cached?: boolean;
-  notes?: string[];
+  version: string;
+  timestamp_utc: string;
+  nearby_radius_miles: number;
+  nearby_site_limit: number;
+  notes: string[];
 }
 
 export interface AnalyzeResponse {
   location: Location;
-  signals: Signals;
-  score: Score;
-  evidence: Evidence;
+  nearest_mapped_site: ProximitySite | null;
+  nearest_by_category: NearestByCategory;
+  counts_within_miles: CountsWithinMiles;
+  nearby_sites: ProximitySite[];
   meta: Meta;
 }
 
@@ -93,39 +65,7 @@ export interface HealthResponse {
   startup_total_seconds?: number;
 }
 
-export interface ReportDriver {
-  title: string;
-  detail: string;
-}
-
-export interface ReportSiteTypeContext {
-  site_type: string;
-  what_it_can_indicate: string;
-}
-
-export interface ReportNextStep {
-  action: string;
-  why: string;
-}
-
-export interface ReportConfidence {
-  level: RiskBand;
-  rationale: string;
-}
-
-export interface ReportResponse {
-  summary: string;
-  top_drivers_explained: ReportDriver[];
-  site_type_context: ReportSiteTypeContext[];
-  recommended_next_steps: ReportNextStep[];
-  limitations: string[];
-  confidence: ReportConfidence;
-}
-
-export interface GenerateReportPayload {
-  lat: number;
-  lon: number;
-}
+export type ActiveEvidence = ProximitySite;
 
 export interface MapFocusRequest {
   id: number;
