@@ -9,11 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-<<<<<<< Updated upstream
-        sans: ["var(--font-open-sans)", "Segoe UI", "Helvetica Neue", "sans-serif"],
-=======
         sans: ["var(--font-poppins)", "Segoe UI", "Helvetica Neue", "sans-serif"],
->>>>>>> Stashed changes
       },
       colors: {
         canvas: "var(--canvas)",
