@@ -575,7 +575,7 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="animate-revealUp stagger-1 min-h-0 lg:col-span-1">
+        <section className="min-h-0 lg:col-span-1">
           <Sidebar
             analysis={analysis}
             analysisError={analysisError}

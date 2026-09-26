@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 import { distanceTone, formatMiles, formatSiteSource } from "@/lib/format";
 import type { AnalyzeResponse, LatLon, ProximitySite, SiteCategory } from "@/lib/types";
 
@@ -73,7 +75,7 @@ function SiteSummary({
   );
 }
 
-export default function Sidebar({
+function Sidebar({
   analysis,
   analysisError,
   isAnalyzing,
@@ -212,3 +214,5 @@ export default function Sidebar({
     </aside>
   );
 }
+
+export default memo(Sidebar);
