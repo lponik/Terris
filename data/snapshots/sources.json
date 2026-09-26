@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "strategy": "snapshot-first",
+  "provenance_note": "Runtime data is built from versioned canonical CSV snapshots. The former NPL_Boundaries.gdb output is retained as a compatibility snapshot so legacy-only Superfund EPA IDs are not lost; new NPL records take precedence for duplicate EPA IDs.",
+  "sources": {
+    "landfill": {
+      "publisher": "U.S. Environmental Protection Agency",
+      "dataset": "Landfill Methane Outreach Program landfill data",
+      "source_label": "EPA_LMOP",
+      "raw_artifacts": [
+        "landfilllmopdata.xlsx"
+      ]
+    },
+    "superfund_legacy": {
+      "publisher": "U.S. Environmental Protection Agency",
+      "dataset": "Legacy Superfund site-boundary representative points",
+      "source_label": "EPA NPL Superfund boundaries (legacy)",
+      "raw_artifacts": [
+        "NPL_Boundaries.gdb"
+      ]
+    },
+    "superfund_npl": {
+      "publisher": "U.S. Environmental Protection Agency",
+      "dataset": "Final, Proposed, and Deleted National Priorities List sites",
+      "source_label": "EPA NPL",
+      "raw_artifacts": [
+        "final-proposed-deleted-NPL.xlsx"
+      ]
+    },
+    "superfund_saa": {
+      "publisher": "U.S. Environmental Protection Agency",
+      "dataset": "Superfund Alternative Approach sites with usable coordinates (SEMS FOIA-014)",
+      "source_label": "EPA FOIA-014",
+      "raw_artifacts": [
+        "superfund_alternative_approach_sites.xlsx"
+      ]
+    }
+  },
+  "cleaning": {
+    "landfill": {
+      "input_rows": 2323,
+      "rows_written": 2323,
+      "dropped_rows": 0,
+      "dropped_invalid_category": 0,
+      "dropped_missing_required": 0,
+      "dropped_invalid_coordinates": 0,
+      "dropped_outside_coverage": 0,
+      "dropped_invalid_metadata": 0,
+      "collapsed_duplicate_ids": 0
+    },
+    "superfund_legacy": {
+      "input_rows": 1908,
+      "rows_written": 1908,
+      "dropped_rows": 0,
+      "dropped_invalid_category": 0,
+      "dropped_missing_required": 0,
+      "dropped_invalid_coordinates": 0,
+      "dropped_outside_coverage": 0,
+      "dropped_invalid_metadata": 0,
+      "collapsed_duplicate_ids": 0
+    },
+    "superfund_npl": {
+      "input_rows": 47199,
+      "unique_epa_ids": 1721,
+      "rows_written": 1721,
+      "npl_status_counts": {
+        "Final NPL": 1260,
+        "Proposed NPL": 28,
+        "Deleted NPL": 433
+      },
+      "dropped_rows": 45478,
+      "dropped_invalid_category": 0,
+      "dropped_missing_required": 0,
+      "dropped_invalid_coordinates": 0,
+      "dropped_outside_coverage": 0,
+      "dropped_invalid_metadata": 0,
+      "collapsed_duplicate_ids": 45478
+    },
+    "superfund_saa": {
+      "input_rows": 48,
+      "upstream_rows_reviewed": 76,
+      "rows_written": 48,
+      "upstream_rows_excluded_without_usable_coordinates": 28,
+      "dropped_rows": 0,
+      "dropped_invalid_category": 0,
+      "dropped_missing_required": 0,
+      "dropped_invalid_coordinates": 0,
+      "dropped_outside_coverage": 0,
+      "dropped_invalid_metadata": 0,
+      "collapsed_duplicate_ids": 0
+    }
+  }
+}

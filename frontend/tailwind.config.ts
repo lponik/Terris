@@ -8,6 +8,9 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-poppins)", "Segoe UI", "Helvetica Neue", "sans-serif"],
+      },
       colors: {
         canvas: "var(--canvas)",
         panel: "var(--panel)",
@@ -16,15 +19,11 @@ const config: Config = {
         muted: "var(--muted)",
         accent: "var(--accent)",
         accentSoft: "var(--accent-soft)",
-        low: "var(--low)",
-        moderate: "var(--moderate)",
-        high: "var(--high)",
         border: "var(--border)",
         danger: "var(--danger)",
+        warning: "var(--warning)",
         hazardLandfill: "var(--haz-landfill)",
         hazardLandfillSoft: "var(--haz-landfill-soft)",
-        hazardMilitary: "var(--haz-military)",
-        hazardMilitarySoft: "var(--haz-military-soft)",
         hazardSuperfund: "var(--haz-superfund)",
         hazardSuperfundSoft: "var(--haz-superfund-soft)",
       },

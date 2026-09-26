@@ -10,7 +10,7 @@ from typing import Literal
 from dotenv import load_dotenv
 
 
-EXPECTED_CATEGORIES = ("landfill", "military_base", "superfund_npl")
+EXPECTED_CATEGORIES = ("landfill", "superfund")
 
 
 def _load_env_files() -> None:
@@ -29,10 +29,7 @@ _load_env_files()
 @dataclass(frozen=True)
 class Settings:
     data_path: str = "data/processed/all_sites.csv"
-    port: int = 8000
-    cache_size: int = 5000
     version: str = "0.1.0"
-    cache_rounding_decimals: int = 4
     environment: Literal["development", "production"] = "development"
     frontend_origin: str | None = None
     cors_allow_origins: tuple[str, ...] = (
@@ -43,17 +40,6 @@ class Settings:
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )
-
-
-
-def _get_int(name: str, default: int) -> int:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
-    try:
-        return int(raw)
-    except ValueError as exc:
-        raise ValueError(f"Environment variable {name} must be an integer, got {raw!r}") from exc
 
 
 def _get_environment() -> Literal["development", "production"]:
@@ -77,22 +63,10 @@ def _split_csv_values(raw: str) -> tuple[str, ...]:
     return tuple(values)
 
 
-
 def load_settings() -> Settings:
     """Create settings from environment variables."""
-    port = _get_int("PORT", 8000)
-    cache_size = _get_int("CACHE_SIZE", 5000)
-    cache_rounding_decimals = _get_int("CACHE_ROUNDING_DECIMALS", 4)
     environment = _get_environment()
 
-    if port <= 0:
-        raise ValueError(f"PORT must be > 0, got {port}")
-    if cache_size <= 0:
-        raise ValueError(f"CACHE_SIZE must be > 0, got {cache_size}")
-    if cache_rounding_decimals < 0 or cache_rounding_decimals > 8:
-        raise ValueError(
-            f"CACHE_ROUNDING_DECIMALS must be between 0 and 8, got {cache_rounding_decimals}"
-        )
     frontend_origin = os.getenv("FRONTEND_ORIGIN", "").strip() or None
     if environment == "production":
         if not frontend_origin:
@@ -110,10 +84,7 @@ def load_settings() -> Settings:
 
     return Settings(
         data_path=os.getenv("DATA_PATH", "data/processed/all_sites.csv"),
-        port=port,
-        cache_size=cache_size,
         version=os.getenv("APP_VERSION", "0.1.0"),
-        cache_rounding_decimals=cache_rounding_decimals,
         environment=environment,
         frontend_origin=frontend_origin,
         cors_allow_origins=cors_allow_origins,

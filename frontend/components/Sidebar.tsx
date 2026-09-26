@@ -1,18 +1,35 @@
-import { useEffect, useState } from "react";
+import { memo } from "react";
 
-import AnimatedSection from "@/components/AnimatedSection";
-import BreakdownBars from "@/components/BreakdownBars";
-import ScoreBadge from "@/components/ScoreBadge";
-import SignalsTable from "@/components/SignalsTable";
-import { formatMiles } from "@/lib/format";
-import type { AnalyzeResponse, EvidenceCategory, EvidenceItem } from "@/lib/types";
+import { distanceTone, formatMiles, formatSiteSource } from "@/lib/format";
+import type { AnalyzeResponse, LatLon, ProximitySite, SiteCategory } from "@/lib/types";
 
 interface SidebarProps {
   analysis: AnalyzeResponse | null;
   analysisError: string | null;
   isAnalyzing: boolean;
-  onEvidenceSelect: (category: EvidenceCategory, item: EvidenceItem, index: number) => void;
+  selectedPoint: LatLon | null;
+  selectedLocationLabel: string | null;
+  selectedStateCode: string | null;
+  onSiteSelect: (item: ProximitySite, index: number) => void;
 }
+
+const categoryDetails: Record<
+  SiteCategory,
+  { label: string; heading: string; tone: string; dot: string }
+> = {
+  superfund: {
+    label: "Superfund",
+    heading: "Nearest mapped Superfund site",
+    tone: "text-hazardSuperfund",
+    dot: "bg-hazardSuperfund",
+  },
+  landfill: {
+    label: "Landfill",
+    heading: "Nearest landfill",
+    tone: "text-hazardLandfill",
+    dot: "bg-hazardLandfill",
+  },
+};
 
 function ErrorBox({ message }: { message: string }) {
   return (
@@ -22,217 +39,180 @@ function ErrorBox({ message }: { message: string }) {
   );
 }
 
-export default function Sidebar({
+function SiteSummary({
+  site,
+  onSelect,
+}: {
+  site: ProximitySite | null;
+  onSelect: () => void;
+}) {
+  if (!site) {
+    return <p className="py-3 text-sm text-muted">No mapped site is available.</p>;
+  }
+
+  const details = categoryDetails[site.category];
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="group w-full py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+    >
+      <div className="flex items-center justify-between gap-4">
+        <span className={`inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] ${details.tone}`}>
+          <span className={`h-2 w-2 rounded-full ${details.dot}`} />
+          {details.label}
+        </span>
+        <span className={`font-mono text-sm font-semibold tabular-nums ${distanceTone(site.distance_miles)}`}>
+          {formatMiles(site.distance_miles)}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-muted">{details.heading}</p>
+      <p className={`mt-1 truncate text-base font-semibold transition group-hover:text-white ${distanceTone(site.distance_miles)}`}>
+        {site.name}
+      </p>
+      <p className="mt-0.5 text-xs text-muted">{formatSiteSource(site.source)}</p>
+    </button>
+  );
+}
+
+function Sidebar({
   analysis,
   analysisError,
   isAnalyzing,
-  onEvidenceSelect,
+  selectedPoint,
+  selectedLocationLabel,
+  selectedStateCode,
+  onSiteSelect,
 }: SidebarProps) {
-  const [isBreakdownOpen, setIsBreakdownOpen] = useState(true);
-  const [isTopDriversOpen, setIsTopDriversOpen] = useState(true);
-  const [isSignalsOpen, setIsSignalsOpen] = useState(true);
-  const [analysisRevealKey, setAnalysisRevealKey] = useState(0);
-
-  useEffect(() => {
-    if (!analysis) {
-      return;
-    }
-
-    setIsBreakdownOpen(true);
-    setIsTopDriversOpen(true);
-    setIsSignalsOpen(true);
-    setAnalysisRevealKey((current) => current + 1);
-  }, [analysis]);
-
-  const hazardToneClasses = {
-    landfill: {
-      chip: "border-hazardLandfill/45 bg-hazardLandfillSoft/70 text-hazardLandfill",
-      card: "border-hazardLandfill/35 bg-hazardLandfillSoft/22",
-    },
-    military: {
-      chip: "border-hazardMilitary/45 bg-hazardMilitarySoft/70 text-hazardMilitary",
-      card: "border-hazardMilitary/35 bg-hazardMilitarySoft/22",
-    },
-    superfund: {
-      chip: "border-hazardSuperfund/45 bg-hazardSuperfundSoft/70 text-hazardSuperfund",
-      card: "border-hazardSuperfund/35 bg-hazardSuperfundSoft/22",
-    },
-    neutral: {
-      chip: "border-border bg-panel text-muted",
-      card: "border-border bg-panel",
-    },
-  } as const;
-
-  const hazardToneLabel: Record<keyof typeof hazardToneClasses, string> = {
-    landfill: "Landfill",
-    military: "Military",
-    superfund: "Superfund",
-    neutral: "Driver",
-  };
-
-  const nearbyHazards = [
-    {
-      category: "landfill" as const,
-      categoryLabel: "Landfill",
-      tone: "landfill" as const,
-      items: analysis?.evidence.landfill ?? [],
-    },
-    {
-      category: "military_base" as const,
-      categoryLabel: "Military",
-      tone: "military" as const,
-      items: analysis?.evidence.military_base ?? [],
-    },
-    {
-      category: "superfund_npl" as const,
-      categoryLabel: "Superfund",
-      tone: "superfund" as const,
-      items: analysis?.evidence.superfund_npl ?? [],
-    },
-  ]
-    .flatMap((group) =>
-      group.items.slice(0, 3).map((item, sourceIndex) => ({
-        category: group.category,
-        categoryLabel: group.categoryLabel,
-        tone: group.tone,
-        item,
-        sourceIndex,
-        distance: item.distance_miles,
-      })),
-    )
-    .sort((left, right) => {
-      const leftDistance = typeof left.distance === "number" ? left.distance : Number.POSITIVE_INFINITY;
-      const rightDistance = typeof right.distance === "number" ? right.distance : Number.POSITIVE_INFINITY;
-      return leftDistance - rightDistance;
-    });
-
-  const driverTone = (text: string): keyof typeof hazardToneClasses => {
-    const normalized = text.toLowerCase();
-    if (normalized.includes("superfund") || normalized.includes("npl")) {
-      return "superfund";
-    }
-    if (normalized.includes("military")) {
-      return "military";
-    }
-    if (normalized.includes("landfill")) {
-      return "landfill";
-    }
-    return "neutral";
-  };
+  const nearest = analysis?.nearest_mapped_site ?? null;
 
   return (
     <aside className="flex h-full min-h-[320px] flex-col overflow-hidden rounded-3xl border border-border bg-panel shadow-panel">
-      <div className="flex-1 space-y-4 overflow-y-auto p-5">
+      <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
         <header>
-          <h1 className="text-2xl font-bold leading-tight text-ink">Exposure Screening</h1>
-          <p className="mt-1 text-sm text-muted">Proximity signals from three public site datasets.</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">Analysis</p>
+          <h1 className="mt-1 text-2xl font-bold leading-tight text-ink">Environmental Proximity</h1>
+          <p className="mt-1 text-sm leading-relaxed text-muted">
+            Distance to mapped Superfund sites and landfills.
+          </p>
         </header>
 
-        {analysisError ? <ErrorBox message={analysisError} /> : null}
+        {selectedPoint ? (
+          <div className="mt-4 border-t border-border/80 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">Selected location</p>
+            {selectedLocationLabel ? (
+              <p className="mt-1 line-clamp-2 text-sm text-ink">{selectedLocationLabel}</p>
+            ) : null}
+            <p className="mt-1 font-mono text-xs tabular-nums text-muted">
+              {selectedStateCode ? `${selectedStateCode} · ` : ""}
+              {selectedPoint.lat.toFixed(4)}, {selectedPoint.lon.toFixed(4)}
+            </p>
+          </div>
+        ) : null}
 
-        <div key={`analysis-score-${analysisRevealKey}`} className="analysis-enter">
-          <ScoreBadge
-            score={analysis?.score.total}
-            band={analysis?.score.band}
-            isLoading={isAnalyzing}
-          />
-        </div>
+        {analysisError ? <div className="mt-4"><ErrorBox message={analysisError} /></div> : null}
 
-        <div key={`analysis-breakdown-${analysisRevealKey}`} className="analysis-enter analysis-delay-1">
-          <AnimatedSection
-            title="Score Breakdown"
-            isOpen={isBreakdownOpen}
-            onToggle={() => setIsBreakdownOpen((current) => !current)}
-          >
-            <BreakdownBars breakdown={analysis?.score.breakdown} />
-          </AnimatedSection>
-        </div>
+        {isAnalyzing ? (
+          <div className="mt-6 space-y-3" aria-live="polite">
+            <div className="h-4 w-44 animate-pulse rounded bg-border" />
+            <div className="h-16 w-32 animate-pulse rounded bg-border" />
+            <p className="text-sm text-muted">Calculating mapped-site distances...</p>
+          </div>
+        ) : null}
 
-        <div key={`analysis-drivers-${analysisRevealKey}`} className="analysis-enter analysis-delay-2">
-          <AnimatedSection
-            title="Top Drivers"
-            isOpen={isTopDriversOpen}
-            onToggle={() => setIsTopDriversOpen((current) => !current)}
-          >
-            <ul className="space-y-1 text-sm text-ink">
-              {analysis?.score.top_drivers?.length ? (
-                analysis.score.top_drivers.map((driver) => {
-                  const tone = driverTone(driver);
-                  const classes = hazardToneClasses[tone];
-                  return (
-                    <li key={driver} className={`rounded-lg border px-2 py-1 ${classes.card}`}>
-                      <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${classes.chip}`}>
-                        {hazardToneLabel[tone]}
-                      </span>
-                      <p className="mt-1">{driver}</p>
-                    </li>
-                  );
-                })
+        {!isAnalyzing && !analysis ? (
+          <div className="mt-6 border-t border-border pt-5">
+            <p className="text-sm leading-relaxed text-muted">
+              Select a location on the map, then analyze it to see nearby environmental sites.
+            </p>
+          </div>
+        ) : null}
+
+        {!isAnalyzing && analysis ? (
+          <div key={analysis.meta.timestamp_utc} className="analysis-enter mt-6">
+            <section aria-labelledby="nearest-mapped-site">
+              <p id="nearest-mapped-site" className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
+                Nearest mapped environmental site
+              </p>
+              {nearest ? (
+                <button
+                  type="button"
+                  onClick={() => onSiteSelect(nearest, 0)}
+                  className="mt-2 block w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                >
+                  <span className={`font-mono text-5xl font-bold leading-none tabular-nums ${distanceTone(nearest.distance_miles)}`}>
+                    {nearest.distance_miles.toFixed(2)}
+                  </span>
+                  <span className={`ml-2 text-base font-semibold ${distanceTone(nearest.distance_miles)}`}>mi away</span>
+                  <span className={`mt-2 block truncate text-sm ${distanceTone(nearest.distance_miles)}`}>
+                    {categoryDetails[nearest.category].label} · {nearest.name}
+                  </span>
+                </button>
               ) : (
-                <li className="rounded-lg bg-panelSoft/60 px-2 py-1 text-muted">
-                  Run analysis to view top drivers.
-                </li>
+                <p className="mt-2 text-sm text-muted">No mapped sites are available.</p>
               )}
-            </ul>
-          </AnimatedSection>
-        </div>
+            </section>
 
-        <div key={`analysis-signals-${analysisRevealKey}`} className="analysis-enter analysis-delay-3">
-          <AnimatedSection
-            title="Signals"
-            isOpen={isSignalsOpen}
-            onToggle={() => setIsSignalsOpen((current) => !current)}
-          >
-            <SignalsTable signals={analysis?.signals} />
-          </AnimatedSection>
-        </div>
+            <section className="mt-6 divide-y divide-border border-y border-border" aria-label="Nearest site by category">
+              <SiteSummary
+                site={analysis.nearest_by_category.superfund}
+                onSelect={() => {
+                  const site = analysis.nearest_by_category.superfund;
+                  if (site) onSiteSelect(site, 0);
+                }}
+              />
+              <SiteSummary
+                site={analysis.nearest_by_category.landfill}
+                onSelect={() => {
+                  const site = analysis.nearest_by_category.landfill;
+                  if (site) onSiteSelect(site, 0);
+                }}
+              />
+            </section>
 
-        <AnimatedSection title="Nearby sites" defaultOpen={false}>
-          {nearbyHazards.length === 0 ? (
-            <p className="text-sm text-muted">No nearby sites found.</p>
-          ) : (
-            <ul className="space-y-2">
-              {nearbyHazards.map((hazard, index) => {
-                const classes = hazardToneClasses[hazard.tone];
-                const key = hazard.item.id ?? `${hazard.category}-${hazard.item.name ?? "item"}-${index}`;
-                const stateSuffix = hazard.item.state ? ` (${hazard.item.state})` : "";
-                return (
-                  <li key={key} className={`interactive-card rounded-xl border px-3 py-2 text-sm ${classes.card}`}>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onEvidenceSelect(hazard.category, hazard.item, hazard.sourceIndex)}
-                        className="flex-1 cursor-pointer text-left transition hover:text-white"
-                      >
-                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${classes.chip}`}>
-                          {hazard.categoryLabel}
-                        </span>
-                        <p className="mt-1">
-                          <span className="font-medium text-ink">{hazard.item.name ?? "Unnamed Site"}</span>
-                          <span className="text-muted">{stateSuffix}</span>
-                          <span className="text-muted"> — {formatMiles(hazard.item.distance_miles)}</span>
-                        </p>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onEvidenceSelect(hazard.category, hazard.item, hazard.sourceIndex);
-                        }}
-                        aria-label="Show on map"
-                        title="Show on map"
-                        className="rounded-md border border-border bg-panel px-2 py-1 text-xs text-muted transition hover:bg-panelSoft hover:text-ink"
-                      >
-                        Map
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </AnimatedSection>
+            <section className="mt-6" aria-labelledby="nearby-site-list">
+              <div className="flex items-baseline justify-between gap-3">
+                <h2 id="nearby-site-list" className="text-sm font-semibold text-ink">Nearby Sites</h2>
+                <span className="text-xs text-muted">Within {analysis.meta.nearby_radius_miles.toFixed(0)} mi</span>
+              </div>
+              {analysis.nearby_sites.length ? (
+                <ol className="mt-2 divide-y divide-border/70 border-y border-border/70">
+                  {analysis.nearby_sites.map((site, index) => {
+                    const details = categoryDetails[site.category];
+                    return (
+                      <li key={site.id}>
+                        <button
+                          type="button"
+                          onClick={() => onSiteSelect(site, index)}
+                          className="grid w-full grid-cols-[4.25rem_5.25rem_minmax(0,1fr)] items-center gap-2 py-2.5 text-left transition hover:bg-panelSoft/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                        >
+                          <span className={`font-mono text-xs font-semibold tabular-nums ${distanceTone(site.distance_miles)}`}>
+                            {site.distance_miles.toFixed(2)} mi
+                          </span>
+                          <span className={`text-[10px] font-bold uppercase tracking-[0.1em] ${details.tone}`}>
+                            {details.label}
+                          </span>
+                          <span className={`truncate text-sm ${distanceTone(site.distance_miles)}`}>{site.name}</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              ) : (
+                <p className="mt-2 py-3 text-sm text-muted">
+                  No mapped Superfund sites or landfills are within 5 miles.
+                </p>
+              )}
+            </section>
+
+            <p className="mt-6 border-t border-border pt-4 text-xs leading-relaxed text-muted">
+              Distances represent proximity to mapped environmental sites and do not estimate personal exposure or health risk.
+            </p>
+          </div>
+        ) : null}
       </div>
     </aside>
   );
 }
+
+export default memo(Sidebar);

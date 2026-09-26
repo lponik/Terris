@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  --font-sans: var(--font-poppins), "Segoe UI", "Helvetica Neue", sans-serif;
   --canvas: #030905;
   --panel: #09140e;
   --panel-soft: #0f1f17;
@@ -10,15 +11,11 @@
   --muted: #87a391;
   --accent: #0f6f43;
   --accent-soft: #123224;
-  --low: #2e965f;
-  --moderate: #f4b443;
-  --high: #f2726f;
   --border: #1d372b;
   --danger: #ff7a7a;
+  --warning: #f4cf57;
   --haz-landfill: #3bcf9f;
   --haz-landfill-soft: #123d31;
-  --haz-military: #ffba49;
-  --haz-military-soft: #3f2c0f;
   --haz-superfund: #b4c95e;
   --haz-superfund-soft: #2e3a16;
 }
@@ -41,7 +38,7 @@ html {
 }
 
 body {
-  font-family: "Manrope", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: var(--font-sans);
   color: var(--ink);
   background-color: #020503;
   background:
@@ -72,18 +69,34 @@ a {
   background: #020503;
 }
 
+.terris-location-pin {
+  width: 32px;
+  height: 42px;
+  margin-left: -16px;
+  margin-top: -42px;
+  pointer-events: none;
+  filter: drop-shadow(0 5px 5px rgba(2, 8, 5, 0.5));
+}
+
+.terris-location-pin svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.terris-location-pin path {
+  fill: var(--accent);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.terris-location-pin circle {
+  fill: var(--ink);
+}
+
 .basemap-tiles--osm {
   filter: invert(1) hue-rotate(180deg) brightness(0.68) contrast(1.28) saturate(0.5);
-}
-
-.leaflet-control-attribution {
-  font-size: 10px;
-  background-color: rgba(10, 20, 15, 0.84) !important;
-  color: var(--muted) !important;
-}
-
-.leaflet-control-attribution a {
-  color: var(--ink) !important;
 }
 
 .leaflet-bar,
@@ -201,7 +214,7 @@ a {
 }
 
 .terris-wordmark {
-  font-family: "Manrope", "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: var(--font-sans);
 }
 
 .terris-logo {

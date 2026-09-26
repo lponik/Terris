@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -20,61 +20,56 @@ class Location(BaseModel):
     lon: float
 
 
-class Signals(BaseModel):
-    nearest_landfill_miles: float | None
-    nearest_military_base_miles: float | None
-    nearest_superfund_npl_miles: float | None = None
-    superfund_count_3mi: int = 0
+SiteCategory = Literal["landfill", "superfund"]
 
 
-class ScoreBreakdown(BaseModel):
-    landfill_proximity: float
-    military_proximity: float
-    superfund_proximity: float = 0.0
+class ProximitySite(BaseModel):
+    id: str
+    name: str
+    category: SiteCategory
+    distance_miles: float
+    lat: float
+    lon: float
+    state: str
+    source: str
 
 
-class Score(BaseModel):
-    total: float
-    breakdown: ScoreBreakdown
-    band: Literal["Low", "Moderate", "High"]
-    top_drivers: list[str]
-    meta: dict[str, Any] | None = None
+class NearestByCategory(BaseModel):
+    landfill: ProximitySite | None
+    superfund: ProximitySite | None
 
 
-class EvidenceItem(BaseModel):
-    id: str | None
-    name: str | None
-    distance_miles: float | None
-    lat: float | None = None
-    lon: float | None = None
-    state: str | None
-    source: str | None
+class RadiusCounts(BaseModel):
+    within_1_mile: int
+    within_5_miles: int
+    within_10_miles: int
 
 
-class Evidence(BaseModel):
-    landfill: list[EvidenceItem]
-    military_base: list[EvidenceItem]
-    superfund_npl: list[EvidenceItem] = Field(default_factory=list)
+class CountsWithinMiles(BaseModel):
+    landfill: RadiusCounts
+    superfund: RadiusCounts
 
 
 class Meta(BaseModel):
     version: str
     timestamp_utc: datetime
+    nearby_radius_miles: float
+    nearby_site_limit: int
     notes: list[str]
 
 
 class AnalyzeResponse(BaseModel):
     location: Location
-    signals: Signals
-    score: Score
-    evidence: Evidence
+    nearest_mapped_site: ProximitySite | None
+    nearest_by_category: NearestByCategory
+    counts_within_miles: CountsWithinMiles
+    nearby_sites: list[ProximitySite]
     meta: Meta
 
 
 class CategoryCounts(BaseModel):
     landfill: int
-    military_base: int
-    superfund_npl: int = 0
+    superfund: int
     total: int
 
 
@@ -83,9 +78,8 @@ class StatsResponse(BaseModel):
     data_path: str
     category_counts: CategoryCounts
     load_time_seconds: float
-    tree_build_time_seconds: float
+    prepare_time_seconds: float
     startup_total_seconds: float
-    cache_size: int
     version: str
 
 

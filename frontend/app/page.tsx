@@ -1,6 +1,11 @@
 import Link from "next/link";
 import StarfieldBackground from "@/components/StarfieldBackground";
 
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+
+
 export default function HomePage() {
   return (
     <main className="relative isolate flex min-h-[calc(100vh-3.5rem)] items-center justify-center overflow-hidden px-6">
@@ -12,7 +17,7 @@ export default function HomePage() {
           Terris
         </h1>
         <p className="terris-subtitle mx-auto mt-5 max-w-2xl text-sm leading-relaxed text-muted sm:text-base md:text-lg">      
-          Explore proximity to Superfund sites, landfills, and military bases in the U.S.
+          Explore proximity to mapped Superfund sites and landfills in the U.S.
         </p>
         <Link
           href="/map"

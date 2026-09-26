@@ -11,6 +11,7 @@ interface HeatLayerProps {
   points: HeatPoint[];
   enabled: boolean;
   mode?: HeatMode;
+  zoomLevel: number;
 }
 
 type HeatFactory = (
@@ -26,13 +27,20 @@ type HeatFactory = (
 
 type LeafletWithHeat = typeof L & { heatLayer?: HeatFactory };
 
-function heatOptionsForMode(mode: HeatMode) {
+function heatOptionsForMode(mode: HeatMode, zoomLevel: number) {
+  const density =
+    zoomLevel <= 5
+      ? { radius: 9, blur: 9, minOpacity: 0.08 }
+      : zoomLevel === 6
+        ? { radius: 14, blur: 11, minOpacity: 0.14 }
+        : null;
+
   if (mode === "landfill") {
     return {
-      radius: 21,
-      blur: 15,
+      radius: density?.radius ?? 21,
+      blur: density?.blur ?? 15,
       maxZoom: 12,
-      minOpacity: 0.24,
+      minOpacity: density?.minOpacity ?? 0.24,
       gradient: {
         0.2: "#84cc16",
         0.5: "#22c55e",
@@ -42,27 +50,12 @@ function heatOptionsForMode(mode: HeatMode) {
     };
   }
 
-  if (mode === "military") {
-    return {
-      radius: 23,
-      blur: 16,
-      maxZoom: 12,
-      minOpacity: 0.24,
-      gradient: {
-        0.2: "#facc15",
-        0.5: "#f59e0b",
-        0.8: "#b45309",
-        1.0: "#78350f",
-      },
-    };
-  }
-
   if (mode === "superfund") {
     return {
-      radius: 22,
-      blur: 16,
+      radius: density?.radius ?? 22,
+      blur: density?.blur ?? 16,
       maxZoom: 12,
-      minOpacity: 0.26,
+      minOpacity: density?.minOpacity ?? 0.26,
       gradient: {
         0.2: "#bde680",
         0.5: "#7ebc3a",
@@ -73,10 +66,10 @@ function heatOptionsForMode(mode: HeatMode) {
   }
 
   return {
-    radius: 20,
-    blur: 15,
+    radius: density?.radius ?? 20,
+    blur: density?.blur ?? 15,
     maxZoom: 12,
-    minOpacity: 0.25,
+    minOpacity: density?.minOpacity ?? 0.25,
     gradient: {
       0.2: "#34d399",
       0.5: "#f59e0b",
@@ -86,7 +79,7 @@ function heatOptionsForMode(mode: HeatMode) {
   };
 }
 
-export default function HeatLayer({ points, enabled, mode = "combined" }: HeatLayerProps) {
+export default function HeatLayer({ points, enabled, mode = "combined", zoomLevel }: HeatLayerProps) {
   const map = useMap();
   const layerRef = useRef<L.Layer | null>(null);
 
@@ -105,7 +98,7 @@ export default function HeatLayer({ points, enabled, mode = "combined" }: HeatLa
       return;
     }
 
-    const layer = heatFactory(points, heatOptionsForMode(mode));
+    const layer = heatFactory(points, heatOptionsForMode(mode, zoomLevel));
 
     layer.addTo(map);
     layerRef.current = layer;
@@ -116,7 +109,7 @@ export default function HeatLayer({ points, enabled, mode = "combined" }: HeatLa
         layerRef.current = null;
       }
     };
-  }, [enabled, map, mode, points]);
+  }, [enabled, map, mode, points, zoomLevel]);
 
   return null;
 }

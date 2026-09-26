@@ -2,14 +2,11 @@
 
 from __future__ import annotations
 
-import copy
 import logging
 import math
 import sys
-from collections import OrderedDict
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from threading import RLock
 from time import perf_counter
 from typing import Any
 from uuid import uuid4
@@ -25,58 +22,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import Settings, load_settings
-from .data_loader import SpatialDataStore, load_spatial_data
+from .data_loader import (
+    NEARBY_RADIUS_MILES,
+    NEARBY_SITE_LIMIT,
+    SpatialDataStore,
+    load_spatial_data,
+)
 from .models import (
     AnalyzeRequest,
     AnalyzeResponse,
     CategoryCounts,
-    Evidence,
+    CountsWithinMiles,
     HealthResponse,
     Location,
     Meta,
-    Score,
-    ScoreBreakdown,
-    Signals,
+    NearestByCategory,
+    ProximitySite,
+    RadiusCounts,
     StatsResponse,
 )
-from .scoring import compute_score
 
 logger = logging.getLogger(__name__)
 
 # FINAL PRODUCTION READINESS CHECKLIST:
-# - Deterministic scoring intact
+# - Deterministic proximity calculations intact
 # - No AI dependency in request path
-# - BallTrees built once at startup
+# - Vectorized coordinate arrays prepared once at startup
 # - CORS restricted in production via FRONTEND_ORIGIN
 # - Safe structured error handling
 # - Ready for Render backend + Vercel frontend deployment
-
-
-class AnalysisCache:
-    """Thread-safe in-memory LRU cache for analyze responses."""
-
-    def __init__(self, maxsize: int) -> None:
-        if maxsize <= 0:
-            raise ValueError("CACHE_SIZE must be > 0")
-        self.maxsize = maxsize
-        self._store: OrderedDict[tuple[float, float], AnalyzeResponse] = OrderedDict()
-        self._lock = RLock()
-
-    def get(self, key: tuple[float, float]) -> AnalyzeResponse | None:
-        with self._lock:
-            value = self._store.get(key)
-            if value is None:
-                return None
-            self._store.move_to_end(key)
-            return copy.deepcopy(value)
-
-    def set(self, key: tuple[float, float], value: AnalyzeResponse) -> None:
-        with self._lock:
-            if key in self._store:
-                self._store.move_to_end(key)
-            self._store[key] = copy.deepcopy(value)
-            if len(self._store) > self.maxsize:
-                self._store.popitem(last=False)
 
 
 def _utcnow() -> datetime:
@@ -108,15 +82,20 @@ def _error_response(
     return JSONResponse(status_code=status_code, content=payload)
 
 
-def _rounded_evidence(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    rounded_items: list[dict[str, Any]] = []
-    for item in items:
-        rounded_item = dict(item)
-        distance = rounded_item.get("distance_miles")
-        if isinstance(distance, float):
-            rounded_item["distance_miles"] = round(distance, 2)
-        rounded_items.append(rounded_item)
-    return rounded_items
+def _proximity_site(item: dict[str, Any] | None) -> ProximitySite | None:
+    if item is None:
+        return None
+    payload = dict(item)
+    payload["distance_miles"] = round(float(payload["distance_miles"]), 2)
+    return ProximitySite(**payload)
+
+
+def _radius_counts(counts: dict[float, int]) -> RadiusCounts:
+    return RadiusCounts(
+        within_1_mile=counts[1.0],
+        within_5_miles=counts[5.0],
+        within_10_miles=counts[10.0],
+    )
 
 
 def _validate_coordinates_or_400(lat: float, lon: float) -> None:
@@ -129,44 +108,37 @@ def _validate_coordinates_or_400(lat: float, lon: float) -> None:
 
 
 def _build_analyze_response(store: SpatialDataStore, settings: Settings, lat: float, lon: float) -> AnalyzeResponse:
-    landfill_raw = store.nearest_k("landfill", lat, lon, k=3, round_distance_miles=False)
-    military_raw = store.nearest_k("military_base", lat, lon, k=3, round_distance_miles=False)
-    superfund_raw = store.nearest_k("superfund_npl", lat, lon, k=3, round_distance_miles=False)
-
-    landfill_evidence = _rounded_evidence(landfill_raw)
-    military_evidence = _rounded_evidence(military_raw)
-    superfund_evidence = _rounded_evidence(superfund_raw)
-
-    signals_payload = {
-        "nearest_landfill_miles": landfill_raw[0]["distance_miles"] if landfill_raw else None,
-        "nearest_military_base_miles": military_raw[0]["distance_miles"] if military_raw else None,
-        "nearest_superfund_npl_miles": superfund_raw[0]["distance_miles"] if superfund_raw else None,
-        "superfund_count_3mi": store.count_within("superfund_npl", lat, lon, radius_miles=3.0),
-    }
-
-    score_payload = compute_score(signals_payload)
+    spatial_analysis = store.analyze_point(lat, lon)
 
     return AnalyzeResponse(
         location=Location(lat=lat, lon=lon),
-        signals=Signals(**signals_payload),
-        score=Score(
-            total=score_payload["total"],
-            breakdown=ScoreBreakdown(**score_payload["breakdown"]),
-            band=score_payload["band"],
-            top_drivers=score_payload["top_drivers"],
-            meta=score_payload.get("meta"),
+        nearest_mapped_site=_proximity_site(spatial_analysis.nearest_mapped_site),
+        nearest_by_category=NearestByCategory(
+            landfill=_proximity_site(spatial_analysis.nearest_by_category["landfill"]),
+            superfund=_proximity_site(
+                spatial_analysis.nearest_by_category["superfund"]
+            ),
         ),
-        evidence=Evidence(
-            landfill=landfill_evidence,
-            military_base=military_evidence,
-            superfund_npl=superfund_evidence,
+        counts_within_miles=CountsWithinMiles(
+            landfill=_radius_counts(spatial_analysis.counts_within_miles["landfill"]),
+            superfund=_radius_counts(
+                spatial_analysis.counts_within_miles["superfund"]
+            ),
         ),
+        nearby_sites=[
+            site
+            for item in spatial_analysis.nearby_sites
+            if (site := _proximity_site(item)) is not None
+        ],
         meta=Meta(
             version=settings.version,
             timestamp_utc=_utcnow(),
+            nearby_radius_miles=NEARBY_RADIUS_MILES,
+            nearby_site_limit=NEARBY_SITE_LIMIT,
             notes=[
-                "Deterministic score from landfill, military base, and Superfund proximity signals.",
-                "Distances computed via haversine metric on BallTree and reported in miles.",
+                "Distances use mapped source coordinates and vectorized haversine calculations.",
+                "Superfund points are representative mapped locations. NPL coordinates come from the EPA NPL dataset, retained legacy-only points may be boundary-derived, and some SAA-only points are address-geocoded. These points do not represent contamination boundaries or exact contamination locations.",
+                "Proximity does not estimate personal exposure or health risk.",
             ],
         ),
     )
@@ -186,20 +158,13 @@ def _get_settings(request: Request) -> Settings:
     return current_settings
 
 
-def _get_cache(request: Request) -> AnalysisCache:
-    cache: AnalysisCache | None = getattr(request.app.state, "analysis_cache", None)
-    if cache is None:
-        raise HTTPException(status_code=503, detail="Analyze cache not loaded")
-    return cache
-
-
 def _get_request_id(request: Request) -> str:
     header_request_id = request.headers.get("x-request-id", "").strip()
     return header_request_id or str(uuid4())
 
 
 def _is_app_ready(request: Request) -> bool:
-    required_state_keys = ("store", "settings", "analysis_cache", "startup_time", "startup_total_seconds")
+    required_state_keys = ("store", "settings", "startup_time", "startup_total_seconds")
     return all(hasattr(request.app.state, key) for key in required_state_keys)
 
 
@@ -215,25 +180,6 @@ def _get_startup_total_seconds(request: Request) -> float | None:
     if isinstance(startup_total, (int, float)):
         return round(float(startup_total), 3)
     return None
-
-
-def _analyze_with_cache_meta(request: Request, lat: float, lon: float) -> tuple[AnalyzeResponse, bool]:
-    store = _get_store(request)
-    current_settings = _get_settings(request)
-    cache = _get_cache(request)
-
-    cache_key = (
-        round(lat, current_settings.cache_rounding_decimals),
-        round(lon, current_settings.cache_rounding_decimals),
-    )
-
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return cached, True
-
-    response = _build_analyze_response(store=store, settings=current_settings, lat=lat, lon=lon)
-    cache.set(cache_key, response)
-    return response, False
 
 
 settings = load_settings()
@@ -260,7 +206,6 @@ async def lifespan(app: FastAPI):
 
     app.state.store = store
     app.state.settings = settings
-    app.state.analysis_cache = AnalysisCache(maxsize=settings.cache_size)
     app.state.startup_time = startup_time
     app.state.startup_total_seconds = store.stats.startup_total_seconds
     app.state.first_analyze_success_logged = False
@@ -274,8 +219,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Environmental Exposure Risk API",
-    description="Deterministic spatial screening for landfills, military bases, and Superfund sites.",
+    title="Environmental Proximity API",
+    description="Deterministic proximity to mapped landfills and Superfund sites.",
     debug=False,
     version=settings.version,
     lifespan=lifespan,
@@ -386,21 +331,19 @@ def stats(request: Request) -> StatsResponse:
     current_settings = _get_settings(request)
 
     counts = store.category_counts
-    total = counts["landfill"] + counts["military_base"] + counts["superfund_npl"]
+    total = counts["landfill"] + counts["superfund"]
 
     return StatsResponse(
         dataset_loaded=True,
         data_path=store.stats.data_path,
         category_counts=CategoryCounts(
             landfill=counts["landfill"],
-            military_base=counts["military_base"],
-            superfund_npl=counts["superfund_npl"],
+            superfund=counts["superfund"],
             total=total,
         ),
         load_time_seconds=store.stats.load_time_seconds,
-        tree_build_time_seconds=store.stats.tree_build_time_seconds,
+        prepare_time_seconds=store.stats.prepare_time_seconds,
         startup_total_seconds=store.stats.startup_total_seconds,
-        cache_size=current_settings.cache_size,
         version=current_settings.version,
     )
 
@@ -409,11 +352,15 @@ def stats(request: Request) -> StatsResponse:
 def analyze(request: Request, payload: AnalyzeRequest) -> AnalyzeResponse:
     request_id = _get_request_id(request)
     start = perf_counter()
-    cache_hit = False
     outcome = "success"
     try:
         _validate_coordinates_or_400(payload.lat, payload.lon)
-        response, cache_hit = _analyze_with_cache_meta(request=request, lat=payload.lat, lon=payload.lon)
+        response = _build_analyze_response(
+            store=_get_store(request),
+            settings=_get_settings(request),
+            lat=payload.lat,
+            lon=payload.lon,
+        )
         if not bool(getattr(request.app.state, "first_analyze_success_logged", False)):
             uptime_seconds = _get_uptime_seconds(request)
             logger.info(
@@ -438,11 +385,10 @@ def analyze(request: Request, payload: AnalyzeRequest) -> AnalyzeResponse:
     finally:
         duration_ms = round((perf_counter() - start) * 1000.0, 2)
         logger.info(
-            "analyze_request request_id=%s lat=%.6f lon=%.6f cache_hit=%s outcome=%s duration_ms=%.2f",
+            "analyze_request request_id=%s lat=%.6f lon=%.6f outcome=%s duration_ms=%.2f",
             request_id,
             payload.lat,
             payload.lon,
-            cache_hit,
             outcome,
             duration_ms,
         )
