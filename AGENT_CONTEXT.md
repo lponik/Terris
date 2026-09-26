@@ -29,7 +29,7 @@ Browser <---------------- JSON ---------------------+
 The application has two Docker images and a local `compose.yaml`:
 
 - **Frontend:** Next.js 16, React 19, TypeScript, Tailwind, React Leaflet, and `leaflet.heat`.
-- **Backend:** FastAPI, Pydantic, pandas, and NumPy on Python 3.12.
+- **Backend:** FastAPI, Pydantic, and NumPy on Python 3.12.
 - **Data:** checked-in CSV/JSON artifacts loaded from the local filesystem.
 
 There is no database, authentication, queue, object storage, AI dependency, or server-side frontend proxy in the current request path. The live frontend is presently linked from the README; AWS deployment is only a proposal.
