@@ -1,0 +1,13 @@
+*
+!backend/
+!backend/**
+
+!data/
+!data/processed/
+!data/processed/all_sites.csv
+
+backend/.env
+backend/.env.*
+backend/.venv/
+backend/**/__pycache__/
+backend/**/*.py[cod]
