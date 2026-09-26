@@ -19,6 +19,11 @@ RUN npm run build
 FROM node:20-slim AS runner
 
 WORKDIR /app
+
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 
