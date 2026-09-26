@@ -22,7 +22,9 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get upgrade -y \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -rf /opt/yarn-v1.22.22
 
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
