@@ -254,7 +254,7 @@ export default function HomePage() {
         }
         setIsBackendWarming(false);
         setBackendWarmupWarning(
-          "Warm-up check failed. Analyze is still available, but the first request can take up to ~30 seconds and may retry once.",
+          "Could not confirm backend readiness. Analyze is still available and will retry automatically if needed.",
         );
         logApiTelemetry("warmup_error", error);
       });

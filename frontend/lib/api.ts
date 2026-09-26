@@ -7,7 +7,10 @@ const DEFAULT_BASE_URL = "http://localhost:8000";
 const HEALTH_TIMEOUT_MS = 10_000;
 const COLD_ANALYZE_TIMEOUT_MS = 30_000;
 const WARM_ANALYZE_TIMEOUT_MS = 15_000;
-const HEALTH_MAX_ATTEMPTS = 1;
+// A sleeping production service can need close to 30 seconds to become ready.
+// Three bounded attempts let the health probe cover that window without making
+// an analyze request use a longer timeout than necessary.
+const HEALTH_MAX_ATTEMPTS = 3;
 const ANALYZE_MAX_ATTEMPTS = 2;
 const RETRY_DELAY_BASE_MS = 600;
 const RETRY_DELAY_JITTER_MS = 300;
@@ -61,7 +64,7 @@ function getRequestPolicy(path: string): RequestPolicy {
       coldTimeoutMs: HEALTH_TIMEOUT_MS,
       warmTimeoutMs: HEALTH_TIMEOUT_MS,
       maxAttempts: HEALTH_MAX_ATTEMPTS,
-      markBackendWarm: false,
+      markBackendWarm: true,
     };
   }
   if (path === "/analyze") {
