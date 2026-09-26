@@ -1,5 +1,10 @@
 import ScrollReveal from "@/components/ScrollReveal";
 
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+
+
 const GITHUB_URL = "https://github.com/lponik/Terris";
 
 export default function AboutPage() {

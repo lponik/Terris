@@ -69,6 +69,32 @@ a {
   background: #020503;
 }
 
+.terris-location-pin {
+  width: 32px;
+  height: 42px;
+  margin-left: -16px;
+  margin-top: -42px;
+  pointer-events: none;
+  filter: drop-shadow(0 5px 5px rgba(2, 8, 5, 0.5));
+}
+
+.terris-location-pin svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.terris-location-pin path {
+  fill: var(--accent);
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.terris-location-pin circle {
+  fill: var(--ink);
+}
+
 .basemap-tiles--osm {
   filter: invert(1) hue-rotate(180deg) brightness(0.68) contrast(1.28) saturate(0.5);
 }

@@ -1,10 +1,7 @@
 "use client";
 
-import { CircleMarker, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import HeatLayer from "@/components/HeatLayer";
@@ -37,16 +34,6 @@ const US_BOUNDS = L.latLngBounds(
   [24.396308, -125.0],
   [49.384358, -66.93457],
 );
-
-const selectedPointIcon = L.icon({
-  iconRetinaUrl: markerIcon2x.src,
-  iconUrl: markerIcon.src,
-  shadowUrl: markerShadow.src,
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
-});
 
 const heatModes: Array<{ value: HeatMode; label: string }> = [
   { value: "off", label: "Off" },
@@ -142,6 +129,40 @@ function evidenceColor(category?: string): string {
   return category === "superfund" ? "#b4c95e" : "#3bcf9f";
 }
 
+function SelectedPointPin({ point }: { point: LatLon }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const markerPane = map.getPane("markerPane");
+    if (!markerPane) {
+      return;
+    }
+
+    const pin = L.DomUtil.create("div", "terris-location-pin", markerPane);
+    pin.setAttribute("aria-hidden", "true");
+    pin.innerHTML = `
+      <svg viewBox="0 0 32 42" focusable="false" role="presentation">
+        <path d="M16 1.5C8.27 1.5 2 7.77 2 15.5c0 10.5 14 25 14 25s14-14.5 14-25C30 7.77 23.73 1.5 16 1.5Z" />
+        <circle cx="16" cy="15.5" r="5.25" />
+      </svg>
+    `;
+
+    const updatePosition = () => {
+      L.DomUtil.setPosition(pin, map.latLngToLayerPoint([point.lat, point.lon]));
+    };
+
+    updatePosition();
+    map.on("move zoom viewreset", updatePosition);
+
+    return () => {
+      map.off("move zoom viewreset", updatePosition);
+      pin.remove();
+    };
+  }, [map, point.lat, point.lon]);
+
+  return null;
+}
+
 function SitePopupContent({ site }: { site: ActiveEvidence }) {
   return (
     <div className="space-y-1 text-sm">
@@ -162,7 +183,7 @@ function EvidencePopupMarker({
   onEvidencePopupClose?: () => void;
 }) {
   const map = useMap();
-  const markerRef = useRef<L.Marker | null>(null);
+  const markerRef = useRef<L.CircleMarker | null>(null);
 
   useEffect(() => {
     map.stop();
@@ -178,10 +199,16 @@ function EvidencePopupMarker({
   }, [activeEvidence, map]);
 
   return (
-    <Marker
+    <CircleMarker
       ref={markerRef}
-      position={[activeEvidence.lat, activeEvidence.lon]}
-      icon={selectedPointIcon}
+      center={[activeEvidence.lat, activeEvidence.lon]}
+      radius={9}
+      pathOptions={{
+        color: "#e5f2e9",
+        fillColor: evidenceColor(activeEvidence.category),
+        fillOpacity: 1,
+        weight: 3,
+      }}
       eventHandlers={{
         popupclose: () => {
           onEvidencePopupClose?.();
@@ -191,7 +218,7 @@ function EvidencePopupMarker({
       <Popup>
         <SitePopupContent site={activeEvidence} />
       </Popup>
-    </Marker>
+    </CircleMarker>
   );
 }
 
@@ -272,7 +299,7 @@ export default function MapView({
             onEvidencePopupClose={onEvidencePopupClose}
           />
         ) : null}
-        {selectedPoint ? <Marker position={[selectedPoint.lat, selectedPoint.lon]} icon={selectedPointIcon} /> : null}
+        {selectedPoint ? <SelectedPointPin point={selectedPoint} /> : null}
       </MapContainer>
 
       <a
