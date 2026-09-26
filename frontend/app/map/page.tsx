@@ -4,13 +4,7 @@ import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import Sidebar from "@/components/Sidebar";
-import {
-  ApiError,
-  analyzePoint,
-  getErrorMessage,
-  health,
-  isBackendWarmSession,
-} from "@/lib/api";
+import { ApiError, analyzePoint, getErrorMessage } from "@/lib/api";
 import {
   getGeocodeErrorMessage,
   inferSearchZoom,
@@ -118,8 +112,6 @@ export default function HomePage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const [analysisError, setAnalysisError] = useState<string | null>(null);
-  const [isBackendWarming, setIsBackendWarming] = useState<boolean>(() => !isBackendWarmSession());
-  const [backendWarmupWarning, setBackendWarmupWarning] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<GeocodeResult[]>([]);
@@ -152,8 +144,6 @@ export default function HomePage() {
       }
 
       setAnalysis(response);
-      setIsBackendWarming(false);
-      setBackendWarmupWarning(null);
     } catch (error) {
       if (runId !== analyzeRunId.current) {
         return;
@@ -226,43 +216,6 @@ export default function HomePage() {
     }
     void runAnalysis(point);
   }, [mapZoomLevel, runAnalysis, selectedPoint]);
-
-  useEffect(() => {
-    let active = true;
-    if (isBackendWarmSession()) {
-      setIsBackendWarming(false);
-      setBackendWarmupWarning(null);
-      return () => {
-        active = false;
-      };
-    }
-
-    setIsBackendWarming(true);
-    setBackendWarmupWarning(null);
-
-    void health()
-      .then(() => {
-        if (!active) {
-          return;
-        }
-        setIsBackendWarming(false);
-        setBackendWarmupWarning(null);
-      })
-      .catch((error) => {
-        if (!active) {
-          return;
-        }
-        setIsBackendWarming(false);
-        setBackendWarmupWarning(
-          "Could not confirm backend readiness. Analyze is still available and will retry automatically if needed.",
-        );
-        logApiTelemetry("warmup_error", error);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   const handleSearchSelect = useCallback(
     (result: GeocodeResult) => {
@@ -473,16 +426,6 @@ export default function HomePage() {
         <section
           className="animate-revealUp flex min-h-0 flex-col gap-3 lg:col-span-1"
         >
-          {isBackendWarming ? (
-            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-sm text-muted">
-              Backend warm-up check in progress. If cold, first analyze may take up to ~30 seconds.
-            </div>
-          ) : null}
-          {backendWarmupWarning ? (
-            <div className="rounded-xl border border-border bg-panelSoft px-3 py-2 text-sm text-muted">
-              {backendWarmupWarning}
-            </div>
-          ) : null}
           <div className="relative min-h-0 flex-1">
             <DynamicMap
               selectedPoint={selectedPoint}

@@ -55,16 +55,6 @@ export interface AnalyzeResponse {
   meta: Meta;
 }
 
-export interface HealthResponse {
-  status: "ok";
-  dataset_loaded: boolean;
-  version?: string;
-  timestamp_utc?: string;
-  ready?: boolean;
-  uptime_seconds?: number;
-  startup_total_seconds?: number;
-}
-
 export type ActiveEvidence = ProximitySite;
 
 export interface MapFocusRequest {

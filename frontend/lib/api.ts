@@ -1,16 +1,8 @@
-import type {
-  AnalyzeResponse,
-  HealthResponse,
-} from "./types";
+import type { AnalyzeResponse } from "./types";
 
 const DEFAULT_BASE_URL = "http://localhost:8000";
-const HEALTH_TIMEOUT_MS = 10_000;
 const COLD_ANALYZE_TIMEOUT_MS = 30_000;
 const WARM_ANALYZE_TIMEOUT_MS = 15_000;
-// A sleeping production service can need close to 30 seconds to become ready.
-// Three bounded attempts let the health probe cover that window without making
-// an analyze request use a longer timeout than necessary.
-const HEALTH_MAX_ATTEMPTS = 3;
 const ANALYZE_MAX_ATTEMPTS = 2;
 const RETRY_DELAY_BASE_MS = 600;
 const RETRY_DELAY_JITTER_MS = 300;
@@ -59,14 +51,6 @@ function markBackendWarm(): void {
 }
 
 function getRequestPolicy(path: string): RequestPolicy {
-  if (path === "/health") {
-    return {
-      coldTimeoutMs: HEALTH_TIMEOUT_MS,
-      warmTimeoutMs: HEALTH_TIMEOUT_MS,
-      maxAttempts: HEALTH_MAX_ATTEMPTS,
-      markBackendWarm: true,
-    };
-  }
   if (path === "/analyze") {
     return {
       coldTimeoutMs: COLD_ANALYZE_TIMEOUT_MS,
@@ -214,16 +198,6 @@ function delay(ms: number): Promise<void> {
 
 export function getApiBaseUrl(): string {
   return apiBaseUrl;
-}
-
-export function isBackendWarmSession(): boolean {
-  return isBackendWarm;
-}
-
-export function health(): Promise<HealthResponse> {
-  return requestJson<HealthResponse>("/health", {
-    method: "GET",
-  });
 }
 
 export function analyzePoint(lat: number, lon: number): Promise<AnalyzeResponse> {
