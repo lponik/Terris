@@ -1,96 +1,68 @@
 # Terris
 
-Terris is a deterministic environmental-proximity map. Select a U.S. location to compare its distance to two public environmental-site categories:
+Terris is an environmental-proximity map for the United States. Choose a location to see its distance from mapped EPA Superfund sites and EPA Landfill Methane Outreach Program landfills.
 
-- EPA Superfund sites, including retained legacy records, NPL records, and SAA sites
-- EPA Landfill Methane Outreach Program landfills
+**Live app:** [terris-theta.vercel.app](https://terris-theta.vercel.app/)
 
-Distances represent proximity to mapped environmental sites. They do not estimate contaminants, personal exposure, or health risk and should not replace official records or local testing.
-
-## Live app
-
-https://terris-theta.vercel.app/
+Terris reports proximity, not risk. Results do not estimate contamination, exposure, health outcomes, or property safety. Always consult official records and qualified local professionals when those questions matter.
 
 ## How it works
 
-1. One offline builder validates the versioned landfill, legacy Superfund, NPL, and filtered SAA snapshots, merges Superfund records by EPA ID, and generates the shared runtime bundle.
-2. FastAPI loads `data/processed/all_sites.csv` once and prepares one set of NumPy coordinate arrays per category.
-3. `POST /analyze` performs one vectorized Haversine scan per category and reuses each distance array for nearest-site selection and radius counts.
-4. The Next.js app displays direct proximity results and static heat layers, including a reduced-density national overview.
+- A deterministic data pipeline validates versioned EPA snapshots and generates one backend CSV plus static map heat layers.
+- FastAPI loads the CSV into NumPy arrays once at startup and calculates Haversine distances in memory.
+- The Next.js frontend uses Leaflet, OpenStreetMap tiles, and public Nominatim search to display the results.
+- No database, user account, API key, or AI service is required.
 
-```text
-id,name,category,lat,lon,state,source,metadata_json
-```
+`POST /analyze` returns the nearest mapped site, the nearest site in each category, counts within 1, 5, and 10 miles, and up to 20 sites within 5 miles.
 
-The supported category values are `landfill` and `superfund`.
+## Run locally
 
-## Proximity results
-
-`POST /analyze` returns:
-
-- the nearest mapped environmental site overall;
-- the nearest Superfund site and nearest landfill;
-- category counts within 1, 5, and 10 miles;
-- up to 20 sites within 5 miles, sorted by distance.
-
-Superfund points are representative mapped locations. NPL coordinates come from the EPA NPL dataset, retained legacy-only points may be boundary-derived, and some SAA-only points are address-geocoded. These points do not represent contamination boundaries or exact contamination locations.
-
-## API
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/health` | Liveness and readiness |
-| `GET` | `/stats` | Dataset counts and startup metrics |
-| `POST` | `/analyze` | Proximity results for `{ "lat": number, "lon": number }` |
-
-## Data workflow
-
-Terris uses a snapshot-first pipeline. The cleaned, versioned inputs live under `data/snapshots/`; raw downloads under `data/raw/` are local research material and are not part of the active build.
+The easiest option is Docker:
 
 ```bash
-python scripts/build_data.py
-python scripts/validate_data.py
-python scripts/smoke_test.py
-python -m unittest discover -s tests -v
+docker compose up --build
 ```
 
-`build_data.py` validates and normalizes the canonical snapshots, merges legacy, NPL, and SAA records by EPA ID, then regenerates `all_sites.csv`, three heat payloads, and one checksum manifest. Coordinate precedence is new NPL, retained legacy, then SAA. Outputs are staged before promotion, and a failed promotion rolls back files already replaced. The build is deterministic: unchanged snapshots produce byte-identical outputs and the same dataset version.
+Open <http://localhost:3000>. The API is available at <http://localhost:8000>; useful endpoints are `GET /health`, `GET /stats`, and `POST /analyze`.
 
-`validate_data.py` is read-only. It applies the same snapshot checks and requires every generated artifact to match the expected bytes and checksums.
-
-The active data layout is:
-
-```text
-data/snapshots/landfill.csv
-data/snapshots/superfund_legacy.csv
-data/snapshots/superfund_npl.csv
-data/snapshots/superfund_saa.csv
-data/snapshots/sources.json
-data/processed/all_sites.csv
-data/processed/manifest.json
-frontend/public/heat/{landfill,superfund,combined}.json
-```
-
-Edit or replace snapshots only as an intentional dataset refresh. Update `sources.json` with provenance and cleaning counts, run the builder, review the manifest and diff, then run validation and tests. The retired raw-ingestion scripts are not required to run or deploy the application.
-
-## Local development
-
-Backend:
+To run without Docker, start the services in separate terminals:
 
 ```bash
+# Backend, from the repository root
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
 python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Frontend:
-
 ```bash
+# Frontend
 cd frontend
 npm install
 cp .env.example .env.local
 npm run dev
 ```
 
-`NEXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:8000`. The map uses OpenStreetMap directly and does not require a map API key.
+`NEXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:8000`.
+
+## Data and checks
+
+Canonical inputs live in `data/snapshots/`. Generated files are checked in under `data/processed/` and `frontend/public/heat/` so the deployed app does not fetch or rebuild source data at runtime.
+
+```bash
+python scripts/build_data.py       # regenerate outputs after an intentional snapshot update
+python scripts/validate_data.py    # confirm generated files match the snapshots
+python scripts/smoke_test.py
+python -m unittest discover -s tests -v
+cd frontend && npm run typecheck && npm run build
+```
+
+GitHub Actions runs data validation, backend tests, frontend checks, Docker builds, and image security scans on pushes and pull requests.
+
+## Future AWS learning deployment
+
+The proposed first AWS deployment is intentionally small: one public EC2 instance running the existing Docker containers with Docker Compose. A lightweight reverse proxy can send browser traffic to the frontend and `/api` traffic to FastAPI. Terraform will define one VPC, one public subnet, an internet gateway, a route table, a tightly scoped security group, the EC2 instance, and its IAM role. CI/CD can build the two images, push them to ECR, and deploy the new image tags to that instance.
+
+The dataset remains inside the backend image, so a database is not needed. S3 can be added later for Terraform remote state, and Route 53 plus HTTPS can be added when a domain is ready. This plan is meant to teach practical AWS, Terraform, Docker, networking, and deployment before introducing more infrastructure.
+
+See [AGENT_CONTEXT.md](AGENT_CONTEXT.md) for the detailed architecture and project guardrails.
