@@ -1,6 +1,11 @@
 import Link from "next/link";
 import StarfieldBackground from "@/components/StarfieldBackground";
 
+// @next-codemod-ignore Cache Components adoption: this segment temporarily allows blocking.
+// Remove this opt-out after verifying the segment passes validation without it.
+// See: https://nextjs.org/docs/app/guides/migrating-to-cache-components
+
+
 export default function HomePage() {
   return (
     <main className="relative isolate flex min-h-[calc(100vh-3.5rem)] items-center justify-center overflow-hidden px-6">
