@@ -113,6 +113,13 @@ resource "aws_cloudfront_distribution" "main" {
     cloudfront_default_certificate = true
   }
 
+  lifecycle {
+    ignore_changes = [
+      aliases,
+      viewer_certificate,
+    ]
+  }
+
   tags = {
     Name    = "${var.project_name}-distribution"
     Project = var.project_name
