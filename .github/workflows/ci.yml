@@ -142,6 +142,9 @@ jobs:
       contents: read
       id-token: write
 
+    outputs:
+      backend_image_uri: ${{ steps.publish.outputs.image_uri }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -180,6 +183,7 @@ jobs:
             | docker login --username AWS --password-stdin "${ECR_REGISTRY}"
 
       - name: Tag and push immutable backend image
+        id: publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         env:
           BACKEND_ECR_REPOSITORY_URL: ${{ vars.BACKEND_ECR_REPOSITORY_URL }}
@@ -187,4 +191,104 @@ jobs:
           IMAGE_URI="${BACKEND_ECR_REPOSITORY_URL}:${GITHUB_SHA}"
           docker tag terris-backend "${IMAGE_URI}"
           docker push "${IMAGE_URI}"
+          echo "image_uri=${IMAGE_URI}" >> "${GITHUB_OUTPUT}"
           echo "Published backend image: ${IMAGE_URI}" >> "${GITHUB_STEP_SUMMARY}"
+
+
+  deploy_backend:
+    name: Deploy Backend
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    needs:
+      - docker
+
+    permissions:
+      contents: read
+      id-token: write
+
+    concurrency:
+      group: terris-backend-dev
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: terris-deploy-${{ github.run_id }}
+          allowed-account-ids: "364019835326"
+
+      - name: Deploy exact image through SSM
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          IMAGE_URI: ${{ needs.docker.outputs.backend_image_uri }}
+        run: |
+          set -Eeuo pipefail
+          : "${IMAGE_URI:?Backend publish job did not produce an image URI}"
+
+          mapfile -t BACKEND_INSTANCE_IDS < <(aws ec2 describe-instances \
+            --filters \
+              Name=tag:Name,Values=terris-backend \
+              Name=instance-state-name,Values=running \
+            --query 'Reservations[].Instances[].InstanceId' \
+            --output text \
+            | tr '\t' '\n' \
+            | sed '/^$/d')
+
+          if [[ "${#BACKEND_INSTANCE_IDS[@]}" -ne 1 ]]; then
+            echo "Expected exactly one running Name=terris-backend instance; found ${#BACKEND_INSTANCE_IDS[@]}" >&2
+            exit 1
+          fi
+
+          BACKEND_INSTANCE_ID="${BACKEND_INSTANCE_IDS[0]}"
+          echo "Deploying to ${BACKEND_INSTANCE_ID} (Name=terris-backend)"
+
+          SCRIPT_BASE64="$(base64 --wrap=0 scripts/deploy_backend.sh)"
+          PARAMETERS="$(jq --null-input \
+            --arg script "${SCRIPT_BASE64}" \
+            --arg image "${IMAGE_URI}" \
+            --arg region "${AWS_REGION}" \
+            '{commands: [
+              "set -eu",
+              "mkdir -p /opt/terris",
+              ("echo " + $script + " | base64 --decode > /opt/terris/deploy_backend.sh"),
+              "chmod 700 /opt/terris/deploy_backend.sh",
+              ("/opt/terris/deploy_backend.sh " + $image + " " + $region)
+            ]}')"
+
+          COMMAND_ID="$(aws ssm send-command \
+            --instance-ids "${BACKEND_INSTANCE_ID}" \
+            --document-name AWS-RunShellScript \
+            --comment "Deploy Terris backend ${GITHUB_SHA}" \
+            --parameters "${PARAMETERS}" \
+            --query 'Command.CommandId' \
+            --output text)"
+
+          echo "SSM command: ${COMMAND_ID}"
+
+          set +e
+          aws ssm wait command-executed \
+            --command-id "${COMMAND_ID}" \
+            --instance-id "${BACKEND_INSTANCE_ID}"
+          WAITER_STATUS=$?
+          set -e
+
+          INVOCATION="$(aws ssm get-command-invocation \
+            --command-id "${COMMAND_ID}" \
+            --instance-id "${BACKEND_INSTANCE_ID}" \
+            --output json)"
+
+          echo "${INVOCATION}" | jq --raw-output '.StandardOutputContent'
+          echo "${INVOCATION}" | jq --raw-output '.StandardErrorContent' >&2
+
+          STATUS="$(echo "${INVOCATION}" | jq --raw-output '.Status')"
+          if [[ "${WAITER_STATUS}" -ne 0 || "${STATUS}" != "Success" ]]; then
+            echo "SSM deployment failed with status ${STATUS}" >&2
+            exit 1
+          fi
+
+          echo "Deployed backend image: ${IMAGE_URI}" >> "${GITHUB_STEP_SUMMARY}"

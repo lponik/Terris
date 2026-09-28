@@ -47,6 +47,13 @@ resource "aws_iam_role" "github_actions" {
 
 data "aws_iam_policy_document" "github_actions_deployment" {
   statement {
+    sid       = "DiscoverBackendInstance"
+    effect    = "Allow"
+    actions   = ["ec2:DescribeInstances"]
+    resources = ["*"]
+  }
+
+  statement {
     sid       = "GetECRAuthorizationToken"
     effect    = "Allow"
     actions   = ["ecr:GetAuthorizationToken"]
