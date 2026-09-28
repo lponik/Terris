@@ -54,7 +54,7 @@ jobs:
         run: npm run build
 
       - name: Upload static frontend artifact
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: terris-frontend-${{ github.sha }}
@@ -63,7 +63,7 @@ jobs:
           retention-days: 1
   deploy_frontend:
     name: Deploy Frontend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs:
       - frontend_checks
@@ -73,7 +73,7 @@ jobs:
       id-token: write
 
     concurrency:
-      group: terris-frontend-dev
+      group: terris-frontend-main
       cancel-in-progress: true
 
     steps:
@@ -155,7 +155,7 @@ jobs:
           exit-code: "1"
 
       - name: Configure AWS credentials
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: aws-actions/configure-aws-credentials@v6.3.0
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
@@ -164,7 +164,7 @@ jobs:
           allowed-account-ids: "364019835326"
 
       - name: Authenticate Docker to ECR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           BACKEND_ECR_REPOSITORY_URL: ${{ vars.BACKEND_ECR_REPOSITORY_URL }}
           AWS_REGION: ${{ vars.AWS_REGION }}
@@ -177,7 +177,7 @@ jobs:
 
       - name: Tag and push immutable backend image
         id: publish
-        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           BACKEND_ECR_REPOSITORY_URL: ${{ vars.BACKEND_ECR_REPOSITORY_URL }}
         run: |
@@ -188,7 +188,7 @@ jobs:
           echo "Published backend image: ${IMAGE_URI}" >> "${GITHUB_STEP_SUMMARY}"
   deploy_backend:
     name: Deploy Backend
-    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     needs:
       - backend_image
@@ -198,7 +198,7 @@ jobs:
       id-token: write
 
     concurrency:
-      group: terris-backend-dev
+      group: terris-backend-main
       cancel-in-progress: false
 
     steps:

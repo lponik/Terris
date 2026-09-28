@@ -25,7 +25,7 @@ variable "github_repository" {
 variable "github_deployment_branch" {
   description = "Git branch allowed to assume the Terris deployment role."
   type        = string
-  default     = "dev"
+  default     = "main"
 }
 
 variable "vpc_cidr" {

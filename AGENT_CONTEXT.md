@@ -1,15 +1,12 @@
 # Terris Agent Context
 
-Read this before changing the project. It describes branch `dev` as of 2026-09-26.
+Read this before changing the project. This file is intentionally safe for a public repository. Never add credentials, tokens, account numbers, ARNs, resource IDs, IP addresses, DNS-provider details, private endpoints, or Terraform state values here.
 
 ## Product boundary
 
-Terris is a deterministic U.S. environmental-proximity map. A user chooses a location and sees distances to:
+Terris is a deterministic U.S. environmental-proximity map. A user chooses a location and sees distances to EPA Superfund sites and EPA Landfill Methane Outreach Program landfills.
 
-- EPA Superfund sites, including retained legacy, NPL, and SAA records;
-- EPA Landfill Methane Outreach Program landfills.
-
-Terris does **not** calculate risk, exposure, severity, health outcomes, or property safety. Keep that limitation visible. Military sites, industrial facilities, reports, and a Learn route are outside the current scope. The heat layers and homepage particle background are intentional.
+Terris reports proximity, not risk, exposure, severity, health outcomes, or property safety. Keep that limitation visible. Military sites, industrial facilities, reports, and a Learn route are outside the current scope. The heat layers and homepage particle background are intentional.
 
 ## Current architecture
 
@@ -18,21 +15,21 @@ Versioned EPA snapshots
         |
         v
 scripts/build_data.py
-        |-- data/processed/all_sites.csv --> FastAPI + NumPy --> /analyze
-        `-- frontend/public/heat/*.json ----> Next.js + Leaflet
-                                                    |
-Browser <---------------- JSON ---------------------+
-   |                                                |
-   |-- public Nominatim search                      `-- OpenStreetMap tiles
+        |-- data/processed/all_sites.csv --> FastAPI + NumPy
+        `-- frontend/public/heat/*.json ----> Next.js static export
+
+Browser --> CloudFront
+             |-- static routes --> private S3 bucket
+             `-- /api/* -------> nginx on EC2 --> backend container
 ```
 
-The application has two Docker images and a local `compose.yaml`:
-
-- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind, React Leaflet, and `leaflet.heat`.
+- **Frontend:** Next.js, React, TypeScript, Tailwind, React Leaflet, and `leaflet.heat`.
 - **Backend:** FastAPI, Pydantic, and NumPy on Python 3.12.
 - **Data:** checked-in CSV/JSON artifacts loaded from the local filesystem.
+- **AWS:** Terraform-managed networking, S3, CloudFront, EC2, ECR, IAM, and SSM access.
+- **CI/CD:** GitHub Actions authenticates to AWS through OIDC. It does not use long-lived AWS access keys or SSH.
 
-There is no database, authentication, queue, object storage, AI dependency, or server-side frontend proxy in the current request path. The live frontend is presently linked from the README; AWS deployment is only a proposal.
+There is no database, user authentication, queue, or AI dependency. Production uses a static frontend in S3 rather than a frontend container. The local `compose.yaml` remains a development convenience.
 
 ## Repository map
 
@@ -40,18 +37,19 @@ There is no database, authentication, queue, object storage, AI dependency, or s
 |---|---|
 | `backend/app/` | API, configuration, data loading, and proximity calculations |
 | `frontend/app/`, `frontend/components/` | Pages and map UI |
-| `scripts/` | Deterministic data build, validation, and smoke checks |
+| `scripts/` | Data build, validation, smoke checks, and backend deployment helper |
 | `tests/` | API, spatial, and pipeline regression tests |
 | `data/snapshots/` | Canonical versioned inputs and provenance |
 | `data/processed/` | Generated backend dataset and manifest |
 | `frontend/public/heat/` | Generated static heat-layer data |
-| `.github/workflows/ci.yml` | Tests, builds, and Trivy image scans |
+| `infra/terraform/` | AWS infrastructure and least-privilege IAM |
+| `.github/workflows/ci.yml` | CI, image publishing, and AWS deployment |
 
-Local `.venv`, `frontend/node_modules`, `frontend/.next`, environment files, and `data/raw` research downloads are not application source.
+Local virtual environments, dependency directories, build output, Terraform state/plan files, provider caches, environment files, and raw research downloads are not application source and must remain ignored.
 
 ## Backend contract
 
-FastAPI loads `data/processed/all_sites.csv` once at startup, validates the `landfill` and `superfund` categories, and prepares immutable NumPy coordinate arrays. Each `/analyze` request runs one vectorized Haversine scan per category and reuses the results for nearest sites, radius counts, and the nearby list.
+FastAPI loads `data/processed/all_sites.csv` once at startup, validates the supported categories, and prepares immutable NumPy coordinate arrays. Each `/analyze` request runs vectorized Haversine calculations and reuses the results for nearest sites, radius counts, and nearby results.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -61,21 +59,15 @@ FastAPI loads `data/processed/all_sites.csv` once at startup, validates the `lan
 
 `/analyze` returns `location`, `nearest_mapped_site`, `nearest_by_category`, `counts_within_miles`, up to 20 `nearby_sites` within 5 miles, and `meta`. Errors use `{"error":{"code":"...","message":"..."}}`.
 
-Configuration:
-
-- `ENVIRONMENT`: `development` or `production`.
-- `FRONTEND_ORIGIN`: required in production and used as the only CORS origin.
-- `DEV_CORS_ORIGINS`: optional comma-separated local origins.
-- `DATA_PATH`: defaults to `data/processed/all_sites.csv` relative to the process working directory.
-- `APP_VERSION`: defaults to `0.1.0`.
+Runtime configuration is documented in `backend/README.md`. Do not add real production values to documentation or tracked environment files.
 
 ## Frontend behavior
 
 Routes are `/`, `/map`, and `/about`. The map supports location search and click selection, nearest-site results, nearby results, and landfill, Superfund, or combined heat layers.
 
-The browser calls FastAPI through `NEXT_PUBLIC_API_BASE_URL`, which is embedded at build time and defaults to `http://localhost:8000`. It also calls public Nominatim directly. Keep Nominatim traffic user-triggered and respect its public usage policy; it is not suitable for unrestricted high-volume traffic.
+The frontend is a static export. In production, browser API requests use the same-origin `/api` path routed by CloudFront. Local development defaults to the local backend unless `NEXT_PUBLIC_API_BASE_URL` is explicitly set.
 
-Map interaction is currently limited to the contiguous U.S., although the dataset also contains Alaska, Hawaii, and territories. This is an unresolved product choice.
+The browser calls public Nominatim directly. Keep requests user-triggered and respect its usage policy. The map interaction is currently limited to the contiguous U.S., although the dataset has wider coverage; treat that as an unresolved product choice.
 
 ## Data pipeline
 
@@ -85,19 +77,13 @@ The shared CSV schema is:
 id,name,category,lat,lon,state,source,metadata_json
 ```
 
-The current generated dataset has 2,323 landfill rows and 1,924 Superfund rows (4,247 total). Its version is `snapshot-e0b537c88e0c`.
+`scripts/build_data.py` validates and normalizes canonical snapshots, merges Superfund records by EPA ID, and regenerates the backend CSV, heat payloads, and checksum manifest as one deterministic set. `scripts/validate_data.py` is read-only and verifies that generated artifacts match the inputs.
 
-`scripts/build_data.py` validates and normalizes the canonical snapshots, merges Superfund records by EPA ID, and regenerates the backend CSV, three heat payloads, and checksum manifest as one deterministic set. Coordinate precedence is NPL, retained legacy, then SAA. `scripts/validate_data.py` is read-only and verifies that every generated artifact matches the inputs.
-
-Superfund points are representative locations, not contamination boundaries. NPL coordinates come from the EPA NPL dataset; retained legacy points may be boundary-derived; some SAA-only points are address-geocoded. Preserve provenance in `data/snapshots/sources.json` during refreshes.
+Superfund points are representative locations, not contamination boundaries. Preserve provenance in `data/snapshots/sources.json` during refreshes. Read the checked-in manifest when exact dataset counts or versions matter; do not duplicate those values here because they change.
 
 ## Development and verification
 
-```bash
-docker compose up --build
-```
-
-Or run the backend from the repository root and the frontend from `frontend/` as documented in the README. Important checks are:
+Use the README for local startup instructions. Important checks are:
 
 ```bash
 python scripts/validate_data.py
@@ -108,53 +94,58 @@ npm run typecheck
 npm run build
 ```
 
-CI already runs validation, Python tests, frontend typechecking/building, Docker image builds, and HIGH/CRITICAL Trivy scans.
+Before changing infrastructure, run:
 
-## Intentionally basic AWS plan
-
-The first AWS version should mirror the application that already exists:
-
-```text
-Internet
-   |
-Route 53 + HTTPS (optional until a domain exists)
-   |
-Public subnet in one VPC
-   |
-Security group: 80/443 public; SSH restricted or disabled
-   |
-One small EC2 instance
-   |-- lightweight reverse proxy: / -> frontend, /api -> backend
-   |-- frontend container
-   `-- backend container (dataset included in image)
-          ^
-          |
-       Amazon ECR <--- CI/CD builds and pushes two images
+```bash
+terraform -chdir=infra/terraform fmt -check -recursive
+terraform -chdir=infra/terraform validate
+terraform -chdir=infra/terraform plan
 ```
 
-Terraform should initially manage only the networking, security group, EC2 instance, IAM permissions needed to pull images, and ECR repositories. Use EC2 user data for the first Docker/Compose bootstrap. Pin image tags for repeatable deployments rather than relying on `latest`.
+Always review the complete plan before applying. Existing cloud configuration may have been changed outside Terraform. Custom-domain aliases and certificates are intentionally protected from Terraform updates; do not remove that lifecycle guard without explicit user direction.
 
-Suggested learning sequence:
+## CI/CD behavior
 
-1. Build and run both images locally with Compose.
-2. Create a VPC, one public subnet, internet gateway, route table, security group, and EC2 instance in Terraform.
-3. Bootstrap Docker on EC2 and deploy Compose manually once to understand the path.
-4. Add ECR and push versioned images.
-5. Extend GitHub Actions to test, build, push, and update the EC2 deployment using narrowly scoped credentials (prefer GitHub OIDC over long-lived AWS keys).
-6. Add a domain and HTTPS when ready; add an S3 backend with state locking when collaborating or when state recovery matters.
+Pull requests and pushes run backend validation/tests, frontend typechecking/building, the backend Docker build, and a fixable HIGH/CRITICAL Trivy image scan.
 
-Do not introduce ECS, Kubernetes, RDS, Auto Scaling, NAT Gateways, private-subnet tiers, a load balancer, or similar services unless a measured application requirement appears. The single EC2 host is intentionally a single point of failure and is appropriate for this learning project. The static dataset means no database is currently justified.
+Pushes to the configured deployment branch additionally:
 
-AWS-specific implementation details still to decide are the region, domain/DNS choice, EC2 architecture and size, reverse proxy, deployment transport, and secret handling. Do not create infrastructure until those choices are explicit.
+1. Upload the static frontend build as a short-lived workflow artifact.
+2. Assume the deployment role through GitHub OIDC.
+3. Sync the frontend to S3 with separate HTML, general-asset, and immutable Next.js cache policies.
+4. Invalidate CloudFront.
+5. Tag the scanned backend image with the full Git commit SHA and push it to immutable ECR.
+6. Discover the single running backend instance from its Terraform-managed `Name` tag.
+7. Transfer and invoke `scripts/deploy_backend.sh` through SSM Run Command.
+8. Fail unless both direct backend health and the nginx `/api` health path succeed.
 
-## Near-term work
+The deployment helper is persisted on the instance under `/opt/terris` so the same path can deploy a prior immutable tag during rollback. Do not add SSH deployment, open port 22, use `latest` as the only tag, or weaken the Trivy gate.
 
-1. Fix frontend parsing of the backend's nested `error.message` envelope.
-2. Resolve the default backend data path independently of the launch directory.
-3. Decide whether the supported geography is the contiguous U.S. or all dataset coverage.
-4. Add application-wide Nominatim rate limiting and repeated-query caching if public usage grows.
-5. Add the minimal Terraform and deployment files only when AWS implementation begins.
+GitHub repository variables contain only non-secret identifiers. Never copy their values into this file. Obtain current values from Terraform outputs and repository settings. Never add AWS access keys to GitHub.
+
+## Infrastructure guardrails
+
+- Keep the current architecture: private S3 frontend, CloudFront routing, one EC2 backend host, ECR, SSM, and Terraform.
+- Do not introduce ECS, Kubernetes, RDS, Auto Scaling, NAT Gateways, load balancers, or additional tiers without a measured requirement and explicit approval.
+- Keep the GitHub OIDC trust restricted to the intended repository and deployment branch.
+- Keep deployment permissions scoped to the Terris resources wherever AWS supports resource-level permissions.
+- EC2 discovers and pulls the exact immutable ECR tag; GitHub initiates deployment through SSM only.
+- Resolve the backend instance by tag, require exactly one running match, and fail safely otherwise.
+- Preserve the loopback-only backend port binding and the existing restart policy.
+- Do not manage custom-domain or certificate configuration unless the user explicitly brings it into scope.
+
+## Public-repository safety
+
+Before committing documentation or workflow changes, check for accidental disclosure. Do not commit:
+
+- credentials, access keys, tokens, passwords, cookies, or private keys;
+- AWS account numbers, full ARNs, concrete resource IDs, public IPs, or private endpoints in documentation;
+- Terraform state, saved plans, crash logs, or provider caches;
+- `.env` files or copied runtime configuration;
+- command output containing infrastructure identifiers when a generic example is sufficient.
+
+Resource identifiers may be non-secret, but this project intentionally keeps them out of public documentation. Use placeholders in examples.
 
 ## Read first
 
-Start with `README.md`, `backend/app/config.py`, `backend/app/data_loader.py`, `backend/app/main.py`, `frontend/lib/api.ts`, `frontend/app/map/page.tsx`, `frontend/components/MapView.tsx`, `scripts/build_data.py`, and `data/processed/manifest.json`.
+Start with `README.md`, `.github/workflows/ci.yml`, `scripts/deploy_backend.sh`, `infra/terraform/github_actions.tf`, `backend/app/config.py`, `backend/app/data_loader.py`, `backend/app/main.py`, `frontend/lib/api.ts`, `frontend/app/map/page.tsx`, `frontend/components/MapView.tsx`, `scripts/build_data.py`, and `data/processed/manifest.json`.
