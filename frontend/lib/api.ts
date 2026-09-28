@@ -1,6 +1,7 @@
 import type { AnalyzeResponse } from "./types";
 
-const DEFAULT_BASE_URL = "http://localhost:8000";
+const DEFAULT_BASE_URL =
+  process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8000";
 const COLD_ANALYZE_TIMEOUT_MS = 30_000;
 const WARM_ANALYZE_TIMEOUT_MS = 15_000;
 const ANALYZE_MAX_ATTEMPTS = 2;

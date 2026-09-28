@@ -57,12 +57,24 @@ python -m unittest discover -s tests -v
 cd frontend && npm run typecheck && npm run build
 ```
 
-GitHub Actions runs data validation, backend tests, frontend checks, Docker builds, and image security scans on pushes and pull requests.
+GitHub Actions runs data validation, backend tests, frontend checks, the backend Docker build, and a HIGH/CRITICAL Trivy image scan on pushes and pull requests.
 
-## Future AWS learning deployment
+## CI/CD
 
-The proposed first AWS deployment is intentionally small: one public EC2 instance running the existing Docker containers with Docker Compose. A lightweight reverse proxy can send browser traffic to the frontend and `/api` traffic to FastAPI. Terraform will define one VPC, one public subnet, an internet gateway, a route table, a tightly scoped security group, the EC2 instance, and its IAM role. CI/CD can build the two images, push them to ECR, and deploy the new image tags to that instance.
+Pushes to `dev` deploy through GitHub Actions using short-lived AWS credentials from GitHub OIDC. No AWS access keys or SSH keys are stored in GitHub.
 
-The dataset remains inside the backend image, so a database is not needed. S3 can be added later for Terraform remote state, and Route 53 plus HTTPS can be added when a domain is ready. This plan is meant to teach practical AWS, Terraform, Docker, networking, and deployment before introducing more infrastructure.
+The frontend job typechecks and builds the static Next.js export once, passes it to the deployment job as a short-lived artifact, syncs it to the private S3 bucket with cache-control headers, and invalidates CloudFront. HTML revalidates on every request, general assets use a one-hour cache, and hashed files under `_next/static/` use a one-year immutable cache.
+
+The backend job runs the tests, builds the Docker image, and blocks on fixable HIGH or CRITICAL Trivy findings. Successful images are tagged with the full Git commit SHA and pushed to the immutable ECR repository. A separate deployment job discovers the single running `Name=terris-backend` EC2 instance, invokes `scripts/deploy_backend.sh` through SSM Run Command, and fails unless both the direct container and nginx-proxied health checks pass.
+
+The deployment workflow uses these non-sensitive GitHub repository variables:
+
+- `AWS_ROLE_ARN`
+- `AWS_REGION`
+- `FRONTEND_BUCKET_NAME`
+- `CLOUDFRONT_DISTRIBUTION_ID`
+- `BACKEND_ECR_REPOSITORY_URL`
+
+To roll back the backend, run the persisted `/opt/terris/deploy_backend.sh` through SSM with a previously published ECR commit-SHA tag. The same pull, replacement, and health-check path is used for forward deployments and rollbacks.
 
 See [AGENT_CONTEXT.md](AGENT_CONTEXT.md) for the detailed architecture and project guardrails.

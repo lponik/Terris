@@ -16,5 +16,20 @@ backend/.env
 # Frontend build/dependency artifacts
 frontend/node_modules/
 frontend/.next/
+frontend/out/
 frontend/tsconfig.tsbuildinfo
 frontend/.env.local
+
+# Terraform local state and working files
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
