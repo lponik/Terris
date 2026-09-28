@@ -1,80 +1,67 @@
 # Terris
 
-Terris is an environmental-proximity map for the United States. Choose a location to see its distance from mapped EPA Superfund sites and EPA Landfill Methane Outreach Program landfills.
+Terris is a U.S. environmental-proximity map that shows how close a selected location is to mapped EPA Superfund sites and EPA Landfill Methane Outreach Program landfills.
 
-**Live app:** [terris-theta.vercel.app](https://terris-theta.vercel.app/)
+**Live app:** [tryterris.org](https://tryterris.org/)
 
-Terris reports proximity, not risk. Results do not estimate contamination, exposure, health outcomes, or property safety. Always consult official records and qualified local professionals when those questions matter.
+## What this project demonstrates
+
+- Designing a cost-conscious AWS architecture around the needs of a real application
+- Managing cloud infrastructure and IAM with Terraform
+- Building GitHub Actions CI/CD with OIDC, immutable artifacts, vulnerability scanning, and health-gated deployments
+- Operating a static Next.js frontend and containerized FastAPI backend without unnecessary platform complexity
 
 ## How it works
 
-- A deterministic data pipeline validates versioned EPA snapshots and generates one backend CSV plus static map heat layers.
-- FastAPI loads the CSV into NumPy arrays once at startup and calculates Haversine distances in memory.
-- The Next.js frontend uses Leaflet, OpenStreetMap tiles, and public Nominatim search to display the results.
-- No database, user account, API key, or AI service is required.
+- A deterministic data pipeline validates versioned EPA snapshots and generates the backend dataset and static heat-layer data
+- FastAPI loads the dataset into NumPy arrays at startup and calculates Haversine distances in memory
+- The Next.js frontend uses Leaflet, OpenStreetMap tiles, and public Nominatim search to display results
+- No database, user account, API key, or AI service is required
 
-`POST /analyze` returns the nearest mapped site, the nearest site in each category, counts within 1, 5, and 10 miles, and up to 20 sites within 5 miles.
+`POST /analyze` returns the nearest mapped site, the nearest site in each category, counts within 1, 5, and 10 miles, and up to 20 nearby sites within 5 miles.
 
-## Run locally
+## AWS architecture
 
-The easiest option is Docker:
-
-```bash
-docker compose up --build
+```text
+Browser
+  |
+CloudFront
+  |-- static pages and assets --> private S3 bucket
+  `-- /api/* -----------------> nginx on EC2 --> FastAPI container
+                                                    ^
+                                                    |
+                                                   ECR
 ```
 
-Open <http://localhost:3000>. The API is available at <http://localhost:8000>; useful endpoints are `GET /health`, `GET /stats`, and `POST /analyze`.
+Terraform manages the AWS infrastructure and IAM configuration. CloudFront is the public HTTPS entry point, serves the static frontend from a private S3 bucket, and forwards `/api/*` requests to nginx on a single EC2 host.
 
-To run without Docker, start the services in separate terminals:
+The backend runs as a Docker container from ECR, and AWS Systems Manager is used for deployment and administration without SSH.
 
-```bash
-# Backend, from the repository root
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r backend/requirements.txt
-python -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
-```
-
-```bash
-# Frontend
-cd frontend
-npm install
-cp .env.example .env.local
-npm run dev
-```
-
-`NEXT_PUBLIC_API_BASE_URL` defaults to `http://localhost:8000`.
-
-## Data and checks
-
-Canonical inputs live in `data/snapshots/`. Generated files are checked in under `data/processed/` and `frontend/public/heat/` so the deployed app does not fetch or rebuild source data at runtime.
-
-```bash
-python scripts/build_data.py       # regenerate outputs after an intentional snapshot update
-python scripts/validate_data.py    # confirm generated files match the snapshots
-python scripts/smoke_test.py
-python -m unittest discover -s tests -v
-cd frontend && npm run typecheck && npm run build
-```
-
-GitHub Actions runs data validation, backend tests, frontend checks, the backend Docker build, and a HIGH/CRITICAL Trivy image scan on pushes and pull requests.
+The architecture is intentionally simple: the frontend is fully static, the dataset is bundled with the backend, and the API performs in-memory calculations without a database. This keeps cost and operational complexity low while still providing CDN delivery, reproducible infrastructure, containerized deployment, and automated CI/CD.
 
 ## CI/CD
 
-Pushes to `main` deploy through GitHub Actions using short-lived AWS credentials from GitHub OIDC. No AWS access keys or SSH keys are stored in GitHub.
+Every push and pull request runs:
 
-The frontend job typechecks and builds the static Next.js export once, passes it to the deployment job as a short-lived artifact, syncs it to the private S3 bucket with cache-control headers, and invalidates CloudFront. HTML revalidates on every request, general assets use a one-hour cache, and hashed files under `_next/static/` use a one-year immutable cache.
+- data validation
+- backend tests
+- frontend typechecking and build
+- backend Docker build
+- blocking Trivy scans for fixable HIGH and CRITICAL vulnerabilities
 
-The backend job runs the tests, builds the Docker image, and blocks on fixable HIGH or CRITICAL Trivy findings. Successful images are tagged with the full Git commit SHA and pushed to the immutable ECR repository. A separate deployment job discovers the single running `Name=terris-backend` EC2 instance, invokes `scripts/deploy_backend.sh` through SSM Run Command, and fails unless both the direct container and nginx-proxied health checks pass.
+Merges to `main` trigger two deployment paths:
 
-The deployment workflow uses these non-sensitive GitHub repository variables:
+1. **Frontend:** reuse the validated static export, sync it to S3 with cache-control headers, then invalidate CloudFront
+2. **Backend:** tag the scanned image with the full Git commit SHA, push it to ECR, and deploy that exact image to EC2 using SSM Run Command
 
-- `AWS_ROLE_ARN`
-- `AWS_REGION`
-- `FRONTEND_BUCKET_NAME`
-- `CLOUDFRONT_DISTRIBUTION_ID`
-- `BACKEND_ECR_REPOSITORY_URL`
+The backend deployment fails if either the container health check or the nginx-proxied health check fails.
 
-To roll back the backend, run the persisted `/opt/terris/deploy_backend.sh` through SSM with a previously published ECR commit-SHA tag. The same pull, replacement, and health-check path is used for forward deployments and rollbacks.
+GitHub authenticates to AWS using short-lived OIDC credentials. The pipeline stores no AWS access keys or SSH keys, never deploys an unscanned backend image, and supports rollback by redeploying a previous commit-SHA image.
 
-See [AGENT_CONTEXT.md](AGENT_CONTEXT.md) for the detailed architecture and project guardrails.
+## Limitations
+
+Terris reports proximity, not risk. Results do not estimate contamination, exposure, health outcomes, or property safety.
+
+For authoritative information, consult official EPA records and qualified local professionals.
+
+See [AGENT_CONTEXT.md](AGENT_CONTEXT.md) for detailed architecture, repository structure, and project guardrails.
