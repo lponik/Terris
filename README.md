@@ -61,7 +61,7 @@ GitHub Actions runs data validation, backend tests, frontend checks, the backend
 
 ## CI/CD
 
-Pushes to `dev` deploy through GitHub Actions using short-lived AWS credentials from GitHub OIDC. No AWS access keys or SSH keys are stored in GitHub.
+Pushes to `main` deploy through GitHub Actions using short-lived AWS credentials from GitHub OIDC. No AWS access keys or SSH keys are stored in GitHub.
 
 The frontend job typechecks and builds the static Next.js export once, passes it to the deployment job as a short-lived artifact, syncs it to the private S3 bucket with cache-control headers, and invalidates CloudFront. HTML revalidates on every request, general assets use a one-hour cache, and hashed files under `_next/static/` use a one-year immutable cache.
 
